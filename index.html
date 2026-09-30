@@ -512,6 +512,16 @@
             Check: createIcon('<polyline points="20 6 9 17 4 12"></polyline>')
         };
 
+        // Helper: Resolve backfill episode for a player
+        function getBackfillEpisode(playerId, dState) {
+            if (!dState || !dState.backfilledPlayers) return null;
+            const bf = dState.backfilledPlayers[playerId] || dState.backfilledPlayers[String(playerId)] || dState.backfilledPlayers[Number(playerId)];
+            if (!bf) return null;
+            if (typeof bf === 'number') return bf;
+            if (typeof bf === 'object' && bf !== null && bf.episode !== undefined) return parseInt(bf.episode);
+            return 1; // Default fallback for legacy boolean true
+        }
+
         function TeamScoreGraph({ leaderboard, scores, eliminationOrder, winner, playerTeams, players, draftState }) {
             const { useState, useMemo } = React;
             const [hoveredPoint, setHoveredPoint] = useState(null);
@@ -1238,17 +1248,6 @@
                 };
             }, [activeLeagueId, activeSeasonId]);
             
-            // Helper: Resolve backfill episode for a player
-            const getBackfillEpisode = (playerId, dState) => {
-                const ds = dState || (typeof draftState !== 'undefined' ? draftState : null);
-                if (!ds || !ds.backfilledPlayers) return null;
-                const bf = ds.backfilledPlayers[playerId] || ds.backfilledPlayers[String(playerId)] || ds.backfilledPlayers[Number(playerId)];
-                if (!bf) return null;
-                if (typeof bf === 'number') return bf;
-                if (typeof bf === 'object' && bf !== null && bf.episode !== undefined) return parseInt(bf.episode);
-                return 1; // Default fallback for legacy boolean true
-            };
-
             // Calculate team scores
             const getTeamScore = (teamId) => {
                 const roster = players.filter(p => playerTeams[p.id] === teamId);
