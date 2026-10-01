@@ -11,6 +11,7 @@
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
@@ -1500,6 +1501,28 @@
                 return breakdown.sort((a, b) => (a.episode || 0) - (b.episode || 0));
             };
             
+            // Helper to check if a category is an elimination category
+            const isEliminationCategory = (catName) => {
+                if (!catName) return false;
+                const lower = catName.toLowerCase();
+                if (lower.includes('first voted out')) return false;
+                return (
+                    lower === 'voted-out' ||
+                    lower === 'medevac' ||
+                    lower === 'expelled' ||
+                    lower.includes('voted out') ||
+                    lower.includes('medevac') ||
+                    lower.includes('expelled') ||
+                    lower.includes('medical removed')
+                );
+            };
+
+            const isWinnerCategory = (catName) => {
+                if (!catName) return false;
+                const lower = catName.toLowerCase();
+                return lower === 'sole-survivor' || lower.includes('sole survivor');
+            };
+
             // Delete a score entry
             const deleteScore = async (playerId, episode, scoreId) => {
                 if (isFinishedSeason) return;
@@ -1509,7 +1532,76 @@
                 
                 if (window.firebaseInitialized) {
                     try {
-                        await database.ref(`leagues/${activeLeagueId}/seasons/${activeSeasonId}/scores/${playerId}/${episode}/${scoreId}`).remove();
+                        const baseRef = `leagues/${activeLeagueId}/seasons/${activeSeasonId}`;
+                        
+                        // 1. Remove the score entry from Firebase
+                        await database.ref(`${baseRef}/scores/${playerId}/${episode}/${scoreId}`).remove();
+
+                        // 2. Fetch remaining scores for this player
+                        const playerScoresSnap = await database.ref(`${baseRef}/scores/${playerId}`).once('value');
+                        const playerScores = playerScoresSnap.val() || {};
+
+                        // 3. Scan remaining scores for elimination and winner events
+                        let remainingElimEpisodes = [];
+                        let hasWinnerScore = false;
+
+                        Object.entries(playerScores).forEach(([ep, epScores]) => {
+                            if (epScores && typeof epScores === 'object') {
+                                Object.values(epScores).forEach(scoreItem => {
+                                    if (scoreItem && scoreItem.category) {
+                                        if (isEliminationCategory(scoreItem.category)) {
+                                            remainingElimEpisodes.push(parseInt(ep));
+                                        }
+                                        if (isWinnerCategory(scoreItem.category)) {
+                                            hasWinnerScore = true;
+                                        }
+                                    }
+                                });
+                            }
+                        });
+
+                        // 4. Update or remove eliminationOrder for this player
+                        if (remainingElimEpisodes.length > 0) {
+                            const earliestEp = Math.min(...remainingElimEpisodes);
+                            await database.ref(`${baseRef}/eliminationOrder/${playerId}`).set(earliestEp);
+                        } else {
+                            // No remaining elimination scores for this player -> remove elimination status
+                            await database.ref(`${baseRef}/eliminationOrder/${playerId}`).remove();
+
+                            // Revert backfill if a player was backfilled due to this player's elimination
+                            const dsSnap = await database.ref(`${baseRef}/draftState`).once('value');
+                            const ds = dsSnap.val() || {};
+                            if (ds.backfilledPlayers) {
+                                let backfilledPlayerIdToRemove = null;
+                                Object.entries(ds.backfilledPlayers).forEach(([bfId, info]) => {
+                                    if (info && (info.replacedPlayerId == playerId || String(info.replacedPlayerId) === String(playerId))) {
+                                        backfilledPlayerIdToRemove = bfId;
+                                    }
+                                });
+
+                                if (backfilledPlayerIdToRemove) {
+                                    delete ds.backfilledPlayers[backfilledPlayerIdToRemove];
+                                    const teamsSnap = await database.ref(`${baseRef}/teams`).once('value');
+                                    const currentTeams = teamsSnap.val() || {};
+                                    delete currentTeams[backfilledPlayerIdToRemove];
+
+                                    await Promise.all([
+                                        database.ref(`${baseRef}/teams`).set(currentTeams),
+                                        database.ref(`${baseRef}/draftState`).set(ds)
+                                    ]);
+                                }
+                            }
+                        }
+
+                        // 5. Update or remove winner status if this player was marked as winner
+                        if (!hasWinnerScore) {
+                            const winnerSnap = await database.ref(`${baseRef}/winner`).once('value');
+                            const currentWinner = winnerSnap.val();
+                            if (currentWinner == playerId || String(currentWinner) === String(playerId)) {
+                                await database.ref(`${baseRef}/winner`).remove();
+                            }
+                        }
+
                         alert('Score deleted successfully!');
                     } catch (err) {
                         console.error('Error deleting score:', err);
@@ -2081,7 +2173,7 @@
                                                         promises.push(
                                                             database.ref(scoredRef).set({
                                                                 scoredAt: Date.now(),
-                                                                scoredBy: firebase.auth().currentUser ? (firebase.auth().currentUser.displayName || firebase.auth().currentUser.email || 'Admin') : 'Admin',
+                                                                scoredBy: (typeof firebase !== 'undefined' && typeof firebase.auth === 'function' && firebase.auth().currentUser) ? (firebase.auth().currentUser.displayName || firebase.auth().currentUser.email || 'Admin') : 'Admin',
                                                                 status: 'completed'
                                                             })
                                                         );
