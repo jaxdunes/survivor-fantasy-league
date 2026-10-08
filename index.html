@@ -663,6 +663,7 @@
                 'Confessional': '#8b5cf6',
                 'Elimination Bonus': '#ec4899',
                 'Sole Survivor Winner Bonus': '#eab308',
+                'Negative Event': '#ef4444',
                 'Other Event': '#64748b'
             };
 
@@ -671,7 +672,7 @@
                 const map = {};
 
                 roster.forEach(player => {
-                    const pScores = scores[player.id] || {};
+                    const pScores = (scores || {})[player.id] || (scores || {})[String(player.id)] || {};
                     const bfEp = getBackfillEpisode(player.id, draftState);
                     
                     Object.entries(pScores).forEach(([epStr, epData]) => {
@@ -680,23 +681,27 @@
                             if (ep > highestEp) highestEp = ep;
                             if (bfEp === null || ep > bfEp) {
                                 if (!map[ep]) map[ep] = {};
-                                if (!map[ep][player.id]) map[ep][player.id] = { player, totalPts: 0, events: [] };
+                                if (!map[ep][player.id]) map[ep][player.id] = { player, totalPts: 0, posPts: 0, negPts: 0, events: [] };
                                 
                                 Object.values(epData || {}).forEach(score => {
                                     const pts = (score.points || 0);
                                     if (pts !== 0) {
-                                        const eventName = score.category || 'Points Event';
-                                        let matchedCol = eventColors['Other Event'];
+                                        const eventName = score.category || (pts < 0 ? 'Negative Penalty' : 'Points Event');
+                                        let matchedCol = pts < 0 ? eventColors['Negative Event'] : eventColors['Other Event'];
+                                        
                                         if (eventName.includes('Individual Immunity')) matchedCol = eventColors['Individual Immunity Win'];
                                         else if (eventName.includes('Tribe Immunity')) matchedCol = eventColors['Tribe Immunity Win'];
                                         else if (eventName.includes('Reward')) matchedCol = eventColors['Individual Reward Win'];
-                                        else if (eventName.includes('Idol')) matchedCol = eventColors['Finds Idol'];
+                                        else if (eventName.includes('Idol') && pts > 0) matchedCol = eventColors['Finds Idol'];
                                         else if (eventName.includes('Advantage')) matchedCol = eventColors['Finds Advantage'];
                                         else if (eventName.includes('Tribal') || eventName.includes('Survived')) matchedCol = eventColors['Survived Tribal Council'];
                                         else if (eventName.includes('Confessional')) matchedCol = eventColors['Confessional'];
                                         else if (eventName.includes('Winner') || eventName.includes('Sole')) matchedCol = eventColors['Sole Survivor Winner Bonus'];
 
                                         map[ep][player.id].totalPts += pts;
+                                        if (pts > 0) map[ep][player.id].posPts += pts;
+                                        else map[ep][player.id].negPts += Math.abs(pts);
+
                                         map[ep][player.id].events.push({
                                             name: eventName,
                                             pts: pts,
@@ -716,8 +721,9 @@
                             if (ep > highestEp) highestEp = ep;
                             if (bfEp === null || ep > bfEp) {
                                 if (!map[ep]) map[ep] = {};
-                                if (!map[ep][player.id]) map[ep][player.id] = { player, totalPts: 0, events: [] };
+                                if (!map[ep][player.id]) map[ep][player.id] = { player, totalPts: 0, posPts: 0, negPts: 0, events: [] };
                                 map[ep][player.id].totalPts += ep;
+                                map[ep][player.id].posPts += ep;
                                 map[ep][player.id].events.push({
                                     name: `Eliminated Placement Bonus (+${ep} pts)`,
                                     pts: ep,
@@ -734,21 +740,25 @@
 
             const episodes = Array.from({ length: maxEp }, (_, i) => i + 1);
             const activeEpMap = epDataMap[selectedEp] || {};
-            const selectedEpTotal = roster.reduce((sum, p) => sum + (activeEpMap[p.id] ? Math.max(0, activeEpMap[p.id].totalPts) : 0), 0);
-            const maxPlayerPtsInEp = Math.max(15, ...roster.map(p => activeEpMap[p.id] ? activeEpMap[p.id].totalPts : 0));
+            const selectedEpTotal = roster.reduce((sum, p) => sum + (activeEpMap[p.id] ? activeEpMap[p.id].totalPts : 0), 0);
+            const maxValInEp = Math.max(15, ...roster.flatMap(p => {
+                const d = activeEpMap[p.id];
+                return d ? [d.posPts, d.negPts] : [0];
+            }));
 
-            return h('div', { className: 'bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 relative' },
-                h('div', { className: 'flex justify-between items-center mb-4 flex-wrap gap-3 pb-3 border-b border-gray-200' },
+            return h('div', { className: 'bg-slate-900/90 border border-amber-500/30 rounded-xl p-4 mb-4 relative text-slate-100 backdrop-blur-md shadow-xl' },
+                // Header Controls for Episode Navigation
+                h('div', { className: 'flex justify-between items-center mb-4 flex-wrap gap-3 pb-3 border-b border-amber-900/50' },
                     h('div', {},
-                        h('span', { className: 'font-extrabold text-xs text-slate-800 uppercase tracking-wider block' }, '📊 EPISODE & PLAYER EVENT BREAKDOWN'),
-                        h('span', { className: 'text-xs text-slate-500 font-medium' }, `Single Episode Focus • Team Total: +${selectedEpTotal} pts`)
+                        h('span', { className: 'font-extrabold text-xs text-amber-400 uppercase tracking-wider block' }, '📊 EPISODE & PLAYER EVENT BREAKDOWN'),
+                        h('span', { className: 'text-xs text-amber-200/70 font-medium' }, `Single Episode Focus • Team Total: ${selectedEpTotal >= 0 ? `+${selectedEpTotal}` : selectedEpTotal} pts`)
                     ),
 
                     h('div', { className: 'flex items-center gap-2 flex-wrap' },
                         h('button', {
                             onClick: () => setSelectedEp(prev => Math.max(1, prev - 1)),
                             disabled: selectedEp <= 1,
-                            className: 'px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs'
+                            className: 'px-2.5 py-1 bg-slate-800 border border-amber-900/60 rounded-lg text-xs font-bold text-amber-200 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs'
                         }, '◄ Prev Ep'),
 
                         h('div', { className: 'flex gap-1 overflow-x-auto py-1 max-w-[280px]' },
@@ -756,7 +766,7 @@
                                 key: ep,
                                 onClick: () => setSelectedEp(ep),
                                 className: `px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                    selectedEp === ep ? 'bg-orange-500 text-white shadow-xs font-extrabold' : 'bg-gray-200/70 text-gray-700 hover:bg-gray-300'
+                                    selectedEp === ep ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-xs font-extrabold' : 'bg-slate-800/80 text-amber-200/70 hover:bg-slate-700'
                                 }`
                             }, `Ep ${ep}`))
                         ),
@@ -764,52 +774,79 @@
                         h('button', {
                             onClick: () => setSelectedEp(prev => Math.min(maxEp, prev + 1)),
                             disabled: selectedEp >= maxEp,
-                            className: 'px-2.5 py-1 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs'
+                            className: 'px-2.5 py-1 bg-slate-800 border border-amber-900/60 rounded-lg text-xs font-bold text-amber-200 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs'
                         }, 'Next Ep ►')
                     )
                 ),
 
-                h('div', { className: 'flex items-end justify-around gap-4 pt-6 pb-2 min-h-[220px]' },
-                    roster.length === 0 ? h('div', { className: 'text-center text-gray-400 italic' }, 'No players on roster') :
+                // Interactive Single Episode Player Bar Chart (Positive & Negative Stacks)
+                h('div', { className: 'flex items-center justify-around gap-4 pt-4 pb-2 min-h-[220px] relative' },
+                    roster.length === 0 ? h('div', { className: 'text-center text-slate-400 italic' }, 'No players on roster') :
                     roster.map(player => {
-                        const pData = activeEpMap[player.id] || { totalPts: 0, events: [] };
-                        const pPts = Math.max(0, pData.totalPts);
-                        const heightPct = (pPts / maxPlayerPtsInEp) * 100;
+                        const pData = activeEpMap[player.id] || { totalPts: 0, posPts: 0, negPts: 0, events: [] };
+                        const netPts = pData.totalPts;
+                        const posEvents = pData.events.filter(e => e.pts > 0);
+                        const negEvents = pData.events.filter(e => e.pts < 0);
 
-                        return h('div', { key: player.id, className: 'flex-1 flex flex-col items-center h-full justify-end max-w-[100px]' },
-                            h('div', { className: `text-xs font-black mb-1 ${pPts > 0 ? 'text-orange-600' : 'text-gray-400'}` }, `${pPts} pts`),
+                        const posPct = (pData.posPts / maxValInEp) * 80;
+                        const negPct = (pData.negPts / maxValInEp) * 80;
 
-                            h('div', { className: 'w-full max-w-[48px] bg-gray-200/50 rounded-t-lg overflow-hidden flex flex-col-reverse shadow-xs border border-gray-300/60 min-h-[10px]', style: { height: `${Math.max(14, heightPct * 1.6)}px` } },
-                                pData.events.length === 0 ? h('div', { className: 'w-full h-full bg-gray-300/40' }) :
-                                pData.events.map((ev, evIdx) => {
-                                    if (ev.pts <= 0) return null;
-                                    const segPct = (ev.pts / (pPts || 1)) * 100;
-                                    return h('div', {
-                                        key: evIdx,
-                                        style: { height: `${segPct}%`, backgroundColor: ev.col },
-                                        className: 'w-full transition-all hover:brightness-125 cursor-pointer border-b border-white/20',
-                                        onMouseEnter: () => setHoveredEvent({ player: player.name, episode: selectedEp, event: ev }),
-                                        onMouseLeave: () => setHoveredEvent(null),
-                                        onClick: () => setHoveredEvent({ player: player.name, episode: selectedEp, event: ev })
-                                    });
-                                })
+                        return h('div', { key: player.id, className: 'flex-1 flex flex-col items-center justify-center h-full max-w-[100px]' },
+                            // Net Pts Label
+                            h('div', { className: `text-xs font-black mb-1.5 ${netPts > 0 ? 'text-emerald-400' : netPts < 0 ? 'text-red-400' : 'text-slate-400'}` }, `${netPts > 0 ? `+${netPts}` : netPts} pts`),
+
+                            // Dual Bar Stack Container (Positive above, Negative below)
+                            h('div', { className: 'w-full max-w-[48px] flex flex-col items-center justify-center relative' },
+                                // Positive Stack (grows upward)
+                                h('div', { className: 'w-full bg-slate-800/60 rounded-t-lg overflow-hidden flex flex-col-reverse shadow-xs border border-amber-900/40 min-h-[4px]', style: { height: `${Math.max(4, posPct)}px` } },
+                                    posEvents.map((ev, evIdx) => {
+                                        const segPct = (ev.pts / (pData.posPts || 1)) * 100;
+                                        return h('div', {
+                                            key: evIdx,
+                                            style: { height: `${segPct}%`, backgroundColor: ev.col },
+                                            className: 'w-full transition-all hover:brightness-125 cursor-pointer border-b border-white/20',
+                                            onMouseEnter: () => setHoveredEvent({ player: player.name, episode: selectedEp, event: ev }),
+                                            onMouseLeave: () => setHoveredEvent(null),
+                                            onClick: () => setHoveredEvent({ player: player.name, episode: selectedEp, event: ev })
+                                        });
+                                    })
+                                ),
+
+                                // Zero Baseline Divider
+                                h('div', { className: 'w-full h-[2px] bg-amber-500/60 z-10 shadow-xs' }),
+
+                                // Negative Stack (grows downward)
+                                pData.negPts > 0 && h('div', { className: 'w-full bg-red-950/40 rounded-b-lg overflow-hidden flex flex-col shadow-xs border border-red-900/60 min-h-[4px]', style: { height: `${Math.max(4, negPct)}px` } },
+                                    negEvents.map((ev, evIdx) => {
+                                        const segPct = (Math.abs(ev.pts) / (pData.negPts || 1)) * 100;
+                                        return h('div', {
+                                            key: evIdx,
+                                            style: { height: `${segPct}%`, backgroundColor: ev.col },
+                                            className: 'w-full transition-all hover:brightness-125 cursor-pointer border-t border-white/20',
+                                            onMouseEnter: () => setHoveredEvent({ player: player.name, episode: selectedEp, event: ev }),
+                                            onMouseLeave: () => setHoveredEvent(null),
+                                            onClick: () => setHoveredEvent({ player: player.name, episode: selectedEp, event: ev })
+                                        });
+                                    })
+                                )
                             ),
 
-                            h('span', { className: 'text-xs font-extrabold text-gray-700 mt-2 text-center truncate max-w-[80px]' }, player.name.split(' ')[0])
+                            h('span', { className: 'text-xs font-extrabold text-slate-300 mt-2 text-center truncate max-w-[80px]' }, player.name.split(' ')[0])
                         );
                     })
                 ),
 
-                hoveredEvent ? h('div', { className: 'mt-3 p-2.5 bg-slate-900 text-white rounded-xl text-xs flex items-center justify-between shadow-lg border border-slate-700 animate-fadeIn' },
+                // Interactive Event Detail Tooltip / Card on Hover or Click
+                hoveredEvent ? h('div', { className: 'mt-3 p-2.5 bg-slate-950 text-white rounded-xl text-xs flex items-center justify-between shadow-2xl border border-amber-500/40 animate-fadeIn' },
                     h('div', { className: 'flex items-center gap-2' },
-                        h('span', { className: 'w-3 h-3 rounded-full shrink-0', style: { backgroundColor: hoveredEvent.event.col } }),
-                        h('span', { className: 'font-bold text-orange-400' }, `${hoveredEvent.player} (Ep ${hoveredEvent.episode}):`),
+                        h('span', { className: 'w-3 h-3 rounded-full shrink-0 shadow-xs', style: { backgroundColor: hoveredEvent.event.col } }),
+                        h('span', { className: 'font-bold text-amber-400' }, `${hoveredEvent.player} (Ep ${hoveredEvent.episode}):`),
                         h('span', { className: 'font-semibold text-slate-200' }, hoveredEvent.event.name),
                         hoveredEvent.event.note && h('span', { className: 'text-slate-400 italic text-[11px]' }, `(${hoveredEvent.event.note})`)
                     ),
-                    h('span', { className: 'font-black text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/40 ml-2' }, `+${hoveredEvent.event.pts} pts`)
-                ) : h('div', { className: 'mt-3 p-2 bg-slate-100 text-slate-500 rounded-xl text-[11px] text-center font-medium border border-dashed border-slate-300' },
-                    '💡 Hover or click over any stacked bar section above to see exact scoring event details'
+                    h('span', { className: `font-black px-2 py-0.5 rounded border ml-2 ${hoveredEvent.event.pts < 0 ? 'text-red-400 bg-red-950/80 border-red-500/40' : 'text-emerald-400 bg-emerald-950/80 border-emerald-500/40'}` }, `${hoveredEvent.event.pts > 0 ? '+' : ''}${hoveredEvent.event.pts} pts`)
+                ) : h('div', { className: 'mt-3 p-2 bg-slate-950/60 text-amber-200/70 rounded-xl text-[11px] text-center font-medium border border-dashed border-amber-900/50' },
+                    '💡 Hover or click over any stacked bar section above to see exact positive or negative scoring event details'
                 )
             );
         }
