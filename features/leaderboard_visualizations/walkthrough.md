@@ -1,45 +1,45 @@
-# Walkthrough: Leaderboard Visualizations & Roster Cards Enhancement
+# Walkthrough: Leaderboard Visualizations & Roster Cards Refinement
 
 ## Overview
-We enhanced the Survivor Fantasy League Leaderboard experience on branch `feature/leaderboard-visualizations-and-roster-cards`.
+Refined all Leaderboard visualizations, tooltips, torn parchment roster tags, Survivor Tiki Torches, and single-episode event breakdowns on branch `feature/leaderboard-visualizations-and-roster-cards`.
 
 ---
 
-## 🎨 Key Enhancements & Refinements
+## 🎨 Implemented Refinements & Bug Fixes
 
-### 1. In-Line Tan Ripped Parchment Roster Tags
-- **Realistic Ripped Paper Aesthetic**: Custom CSS `.parchment-card-tan` featuring an authentic deckled paper clip-path (`clip-path: polygon(...)`), warm tan gradient background, subtle inner drop shadows, and handwritten font (`Caveat`).
-- **In-Line Team Header Placement**: Roster tags are arranged directly in-line on each team header row (next to the team rank & name) rather than buried in a bottom card subsection.
-- **Realistic SVG Torches (No Emojis)**:
-  - **Lit Torch (`TorchLit`)**: Multi-layered SVG flame with outer amber glow and pulsing flame animation (`#ff5500` to `#ffdd00`).
-  - **Unlit Torch (`TorchUnlit`)**: Dark soot top with soft translucent smoke wisps (`#aaaaaa`) drifting upward for eliminated contestants.
+### 1. 📈 Cumulative Graph Cumulative Player Score Breakdown
+- **Cumulative Contribution Tooltip**: Hovering over any team data point at Episode $N$ now lists each player's **cumulative point contribution through Episode $N$**.
+- **Exact Addition**: Player scores listed in the tooltip sum up directly to the team's total cumulative score at that episode.
+
+### 2. 🛡️ Smart Tooltip Positioning & Zero Clipping
+- **Dynamic Orientation & Offsets**: Tooltips automatically detect bounding edges:
+  - Positioned *below* data points when near top (`cy < 110`).
+  - Shifted left or right near horizontal boundaries (`cx > 72%` or `cx < 28%`).
+  - Styled with `overflow-visible` and `z-30` so tooltips never get clipped by chart boxes.
+
+### 3. 🎯 Rank Trajectory Hover Dot Stability Fix
+- **No Dot Spasm / Flickering**: Removed `setHoveredTeamId` thrashing from circle enter events and introduced an expanded 12px transparent target hit circle behind each point. Dot mouse events are 100% stable.
+
+### 4. 💡 Draft ROI [Round].[Pick] Formatting & High Contrast Labels
+- **Pick Format `[Round].[PickNumber]`**:
+  - Displays draft pick order as `1.1` (1st pick Round 1), `1.2`, `1.3`... `2.1` (1st pick Round 2) on top of each bar in bold vibrant orange text (`#f97316`).
+- **High Contrast Castaway Names**: Rendered below X-axis in clean, readable slate font (`#334155`).
+
+### 5. 🗿 Standing Tiki Torches & Darker Tan Ripped Parchment Slips
+- **Darker Tan Parchment (`.parchment-card-tan`)**:
+  - Rich weathered tan paper gradient (`#d3b484` to `#a4814d`), rough jagged ripped clip-path, dark burnt borders, and inner drop shadow.
+  - Handwritten dark sepia vote text (`Caveat` font, `#241404`).
+- **Full Standing Tiki Torches (`TorchLit` & `TorchUnlit`)**:
+  - **Not bound inside parchment**: Placed as a vertical standing torch right beside the parchment slip.
+  - **Lit Torch**: Bamboo shaft, woven basket head, multi-stage flickering flame with radial light aura glow.
+  - **Extinguished Torch**: Charred basket top, ember bed, and translucent rising smoke wisps.
+
+### 6. 📊 Single-Episode & Player Breakdown (Expanded Team View)
+- **Single Episode Focus**: Rebuilt `TeamEventStackedBarChart` to display one episode at a time.
+- **Navigation Controls**: Includes `◄ Prev Ep`, episode selector pills (`Ep 1`, `Ep 2`...), and `Next Ep ►` buttons.
+- **Interactive Event Tooltips**: Hovering or clicking over any stacked bar section displays an interactive detail card with event title, point value (`+15 pts`), category color badge, and notes.
 
 ---
 
-### 2. Main Analytics Graph (4 Optimized Modes)
-- **📈 Cumulative Points Mode**:
-  - Dynamically calculates negative Y-axis bounds (`Math.min(0, ...)`), displaying baseline zero reference lines cleanly.
-  - Multi-line hover tooltips breakdown exact player point contributions for that episode when hovering over any team data point.
-- **📊 Weekly Gains Mode**:
-  - Displays positive/negative episode point gains per team.
-  - Clean minus sign formatting for negative values (e.g. `-10` instead of `+-10`).
-- **🏆 Rank Trajectory Mode**:
-  - Simplified, de-cluttered rank lanes (#1, #2...).
-  - Interactive hover isolation dims non-hovered team lines to 20% opacity for maximum clarity.
-- **💡 Draft ROI Mode**:
-  - Sorted strictly by Draft Pick Order (Pick #1, Pick #2, Pick #3...).
-  - Explicit `Pick #X` sub-labels rendered beneath player contestant names.
-
----
-
-### 3. Expanded Team View: Episode & Player Event Stacked Bar Chart
-- Grouped by **Episode on the X-axis**.
-- Within each episode, renders individual bar columns for each drafted team contestant.
-- Bars are stacked with exact scoring events (e.g. `Individual Immunity (+15)`, `Idol Found (+10)`, `Survived Tribal (+2)`).
-
----
-
-## 🧪 Verification Results
-
-- Verified in local browser (`index.html?league=jacks-league`) via `browser_subagent`.
-- All 4 graph modes, hover tooltips, in-line parchment tags, and expanded episode event breakdowns verified clean without errors.
+## 🧪 Verification Summary
+- Verified in local browser (`index.html`) across all graph modes, tooltips, single-episode navigation, and standing tiki torch parchment tags.
