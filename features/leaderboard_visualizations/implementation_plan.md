@@ -2,7 +2,7 @@
 
 **Target Branch**: `feature/leaderboard-visualizations-and-roster-cards`  
 **Location**: `features/leaderboard_visualizations/implementation_plan.md`  
-**Status**: Ready for Implementation  
+**Status**: Ready for Refined Implementation  
 
 ---
 
@@ -21,62 +21,51 @@
          ┌─────────────────────────────┼─────────────────────────────┐
          ▼                             ▼                             ▼
 ┌───────────────────┐        ┌───────────────────┐        ┌───────────────────┐
-│ Collapsed Parchment│        │ Main League Graph │        │ Team Breakdown    │
-│ Roster Cards      │        │ Mode Toggles (5)  │        │ Deep-Dive Analytics│
-│ - Parchment Texture│        │ - Cumulative Line │        │ - Stacked Event   │
-│ - Tribal Vote Font│        │ - Weekly Heatmap  │        │   Bar Chart       │
-│ - Lit/Unlit Torches│        │ - Rank Trajectory │        │ - Roster Donut    │
-│   (Custom SVGs)   │        │ - Roster Survival │        │   Contribution    │
-│                   │        │ - Draft ROI Value │        │                   │
+│ In-Line Ripped    │        │ Main League Graph │        │ Team Breakdown    │
+│ Parchment Slips   │        │ Mode Toggles (4)  │        │ Deep-Dive Analytics│
+│ - Tan Paper Texture│        │ - Cumulative Line │        │ - Episode Grouped │
+│ - Ragged Paper    │        │   (Player Hover)  │        │   Bars per Player │
+│   Clip-Path       │        │ - Weekly Gains    │        │ - Stacked Exact   │
+│ - Realistic Torches│        │   (Clean -10 format)│       │   Scoring Events  │
+│   (In-Line Header)│        │ - Rank Trajectory │        │ - Roster Donut    │
+│                   │        │   (De-cluttered)  │        │   Contribution    │
+│                   │        │ - Draft ROI       │        │                   │
+│                   │        │   (Sorted by Pick#│        │                   │
 └───────────────────┘        └───────────────────┘        └───────────────────┘
-                                       │
-                                       ▼
-                         ┌───────────────────────────┐
-                         │ SVG Bounds & Negative Y   │
-                         │ - Dynamic min/max domain  │
-                         │ - Padded plot boundary    │
-                         └───────────────────────────┘
 ```
 
 ---
 
 ## Implementation Steps & Component Breakdown
 
-### Phase 1: Custom SVG Torch Components & Survivor Parchment Roster Cards
-- **Step 1.1**: Define SVG `TorchLit` and `TorchUnlit` React components in `index.html`:
-  - `TorchLit`: Wooden handle, metallic rim, glowing fire flame with CSS `@keyframes` pulse.
-  - `TorchUnlit`: Charred handle, dark torch head, translucent rising smoke wisps.
-- **Step 1.2**: Import Google Font `Caveat` or `Permanent Marker` for tribal vote typography.
-- **Step 1.3**: Update collapsed team cards in `index.html` to render a parchment vote badge grid for all drafted contestants on that team, featuring:
-  - Contestant name in tribal vote font.
-  - SVG Lit/Unlit torch depending on elimination status (`eliminationOrder[p.id]`).
-  - Tribe dot badge for current episode tribe assignment.
+### Phase 1: Realistic Tan Ripped Parchment Slips & In-Line Header Placement
+- **Step 1.1**: Enhance SVG `TorchLit` and `TorchUnlit` components in `index.html`:
+  - `TorchLit`: Detailed wooden handle texture, brass cup rim, glowing multi-gradient fire flame with subtle `@keyframes` pulse.
+  - `TorchUnlit`: Charred wood handle, dark soot top, translucent rising smoke trail wisps.
+- **Step 1.2**: Update `ParchmentContestantTag`:
+  - Tan parchment gradient (`#e9d5a1` to `#c8a86b` with deckled/ragged torn paper CSS clip path).
+  - Handwritten vote typography (`Caveat` font, 16px).
+- **Step 1.3**: Move parchment slips in-line inside the team header row next to team name & rank.
 
-### Phase 2: Main League Graph Fixes & 5 Interactive Mode Toggles
-- **Step 2.1**: Fix SVG Y-axis scale and padding in `TeamScoreGraph`:
-  - `minScore = Math.min(0, ...allTeamScores)`
-  - Add 10% bottom padding so negative score lines stay well above bottom axis.
-  - Add 40px left/right padding to `viewBox` so Episode 1 and final Episode dots/labels aren't clipped.
-- **Step 2.2**: Implement Tab Controls Bar for `TeamScoreGraph`:
-  - Mode 1: 📈 **Cumulative Total** (Enhanced line chart).
-  - Mode 2: 📊 **Weekly Score Heatmap / Grouped Bar** (Points per episode).
-  - Mode 3: 🏆 **Rank Trajectory** (Inverted rank #1..#N position tracking).
-  - Mode 4: 🕯️ **Active Roster Survival** (Active players remaining over time).
-  - Mode 5: 💡 **Draft Pick Value / ROI** (Points produced vs draft pick order).
+### Phase 2: Main League Graph Refinements & 4 Mode Toggles
+- **Step 2.1**: Update `TeamScoreGraph` modes & scale:
+  - **Mode 1: 📈 Cumulative Total**: Line chart with multi-line hover tooltip listing each drafted contestant's point contribution for that team in that episode.
+  - **Mode 2: 📊 Weekly Gains**: Grouped bar chart with clean negative formatting (e.g. `-10` instead of `+-10`).
+  - **Mode 3: 🏆 Rank Trajectory**: Inverted rank lanes (#1, #2, #3...). Hovering over a team line dims all other team lines to 20% opacity.
+  - **Mode 4: 💡 Draft Pick Value / ROI**: Sorted strictly by **Draft Pick Order** (Pick 1, Pick 2...) with explicit `Pick #X` sub-labels on X-axis.
 
-### Phase 3: Participant Team-Level Analytics
-- **Step 3.1**: Create `TeamEventStackedBarChart` component:
-  - Rendered when a team card is expanded.
-  - Episode-by-episode stacked bars color-coded by category (Immunities, Idols, Surviving, Confessionals, Bonuses).
-- **Step 3.2**: Create `TeamRosterDonutChart` component:
-  - Interactive SVG donut chart displaying percentage contribution of total points per drafted contestant.
+### Phase 3: Episode & Player Exact Scoring Event Stacked Bar Chart
+- **Step 3.1**: Rebuild `TeamEventStackedBarChart`:
+  - X-axis grouped by **Episode** (Ep 1, Ep 2, Ep 3...).
+  - Within each episode: Individual bars for each player on that team.
+  - Bar height matches player's total episode score.
+  - Stacked segments represent **exact scoring events** (e.g., `Immunity Win (+15)`, `Idol Found (+10)`, `Survived Tribal (+2)`, `Confessional (+1)`).
 
 ---
 
 ## Verification & Testing Plan
 
 1. Verify local dev server runs under `dev_testing/` path without touching live data.
-2. Verify negative team scores render cleanly above the bottom edge of the graph SVG.
-3. Test parchment cards & SVG torch states (lit for active, unlit for eliminated).
-4. Verify main chart toggles update dynamically on click.
-5. Verify team-level stacked bar chart and donut chart render accurately inside expanded team cards.
+2. Verify in-line tan ripped parchment slips with realistic torches display on team header row.
+3. Test 4 main chart modes: Cumulative (multi-line player tooltips), Weekly Gains (clean `-X`), Rank Trajectory (dimming non-selected teams), and Draft ROI (ordered by Pick #).
+4. Verify expanded team breakdown renders episode-grouped bars per player with exact stacked scoring events.

@@ -1,36 +1,45 @@
-# Walkthrough: Leaderboard Visualizations & Parchment Roster Cards
+# Walkthrough: Leaderboard Visualizations & Roster Cards Enhancement
 
-The **Leaderboard Visualizations & Parchment Roster Cards** feature brings immersive Survivor thematic styling and rich data analytics to the Leaderboard.
-
----
-
-## 📜 1. Collapsed Team Parchment Roster Slips & Custom SVG Torches
-- **Parchment Vote Slips**: Each contestant on a fantasy team is displayed as a Survivor tribal council vote slip featuring a warm parchment gradient background, deckled shadow, and handwritten vote typography (`Caveat`).
-- **Custom SVG Torches (No Emojis)**:
-  - 🔥 **Active Contestants**: Rendered with custom lit torch SVGs featuring animated glowing/pulsing fire flames.
-  - 💨 **Eliminated Contestants**: Rendered with custom unlit torch SVGs featuring dark charred tops and translucent rising smoke wisps.
-- **Tribe Color Dots**: Includes tribe color dots indicating each contestant's current tribe.
+## Overview
+We enhanced the Survivor Fantasy League Leaderboard experience on branch `feature/leaderboard-visualizations-and-roster-cards`.
 
 ---
 
-## 📊 2. Main League Graph Fixes & 5 Interactive Visualization Modes
-- **Negative Y-Axis Scale Fix**: The Y-axis domain dynamically calculates `minScore = Math.min(0, ...allScores)` with negative margin padding so negative scores stay visible above the baseline.
-- **Horizontal & Vertical Margin Padding**: Prevents episode dots and labels from being clipped at chart boundaries.
-- **5 Interactive Modes**:
-  1. 📈 **Cumulative Total Score**: Running score line chart across episodes.
-  2. 📊 **Weekly Score Gains**: Grouped bar chart showing points scored in each episode.
-  3. 🏆 **Rank Trajectory**: Inverted rank position tracking graph (#1..#N).
-  4. 🕯️ **Active Roster Survival**: Line chart showing active vs eliminated players remaining per team.
-  5. 💡 **Draft Pick Value / ROI**: Points per draft pick slot to highlight steals vs busts.
+## 🎨 Key Enhancements & Refinements
+
+### 1. In-Line Tan Ripped Parchment Roster Tags
+- **Realistic Ripped Paper Aesthetic**: Custom CSS `.parchment-card-tan` featuring an authentic deckled paper clip-path (`clip-path: polygon(...)`), warm tan gradient background, subtle inner drop shadows, and handwritten font (`Caveat`).
+- **In-Line Team Header Placement**: Roster tags are arranged directly in-line on each team header row (next to the team rank & name) rather than buried in a bottom card subsection.
+- **Realistic SVG Torches (No Emojis)**:
+  - **Lit Torch (`TorchLit`)**: Multi-layered SVG flame with outer amber glow and pulsing flame animation (`#ff5500` to `#ffdd00`).
+  - **Unlit Torch (`TorchUnlit`)**: Dark soot top with soft translucent smoke wisps (`#aaaaaa`) drifting upward for eliminated contestants.
 
 ---
 
-## 🍩 3. Team-Level Deep-Dive Analytics (Expanded Team View)
-- **Roster Contribution Donut Chart**: Interactive SVG donut chart showing the percentage of total team points produced by each drafted contestant.
-- **Episode Category Stacked Bar Chart**: Stacked bar chart showing episode-by-episode point breakdowns color-coded by category (*Immunities, Idols, Surviving, Confessionals, Bonuses*).
+### 2. Main Analytics Graph (4 Optimized Modes)
+- **📈 Cumulative Points Mode**:
+  - Dynamically calculates negative Y-axis bounds (`Math.min(0, ...)`), displaying baseline zero reference lines cleanly.
+  - Multi-line hover tooltips breakdown exact player point contributions for that episode when hovering over any team data point.
+- **📊 Weekly Gains Mode**:
+  - Displays positive/negative episode point gains per team.
+  - Clean minus sign formatting for negative values (e.g. `-10` instead of `+-10`).
+- **🏆 Rank Trajectory Mode**:
+  - Simplified, de-cluttered rank lanes (#1, #2...).
+  - Interactive hover isolation dims non-hovered team lines to 20% opacity for maximum clarity.
+- **💡 Draft ROI Mode**:
+  - Sorted strictly by Draft Pick Order (Pick #1, Pick #2, Pick #3...).
+  - Explicit `Pick #X` sub-labels rendered beneath player contestant names.
 
 ---
 
-## Verification Summary
+### 3. Expanded Team View: Episode & Player Event Stacked Bar Chart
+- Grouped by **Episode on the X-axis**.
+- Within each episode, renders individual bar columns for each drafted team contestant.
+- Bars are stacked with exact scoring events (e.g. `Individual Immunity (+15)`, `Idol Found (+10)`, `Survived Tribal (+2)`).
 
-All components were verified using automated browser testing and local development guards under `dev_testing/`. Production database instances were strictly protected.
+---
+
+## 🧪 Verification Results
+
+- Verified in local browser (`index.html?league=jacks-league`) via `browser_subagent`.
+- All 4 graph modes, hover tooltips, in-line parchment tags, and expanded episode event breakdowns verified clean without errors.

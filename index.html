@@ -100,13 +100,17 @@
             animation: smokeRise 2.2s infinite linear;
             transform-origin: bottom center;
         }
-        .parchment-card {
-            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-            border: 1px solid #d97706;
-            box-shadow: 2px 3px 6px rgba(180, 83, 9, 0.15), inset 0 0 8px rgba(217, 119, 6, 0.15);
+        .parchment-card-tan {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #e9d5a1 100%);
+            border: 1px solid #b45309;
+            box-shadow: 2px 3px 6px rgba(120, 53, 15, 0.2), inset 0 0 8px rgba(217, 119, 6, 0.2);
+            clip-path: polygon(
+                0% 6%, 4% 0%, 96% 2%, 100% 8%, 
+                98% 94%, 94% 100%, 3% 97%, 0% 90%
+            );
         }
         .parchment-text {
-            font-family: 'Caveat', 'Permanent Marker', cursive;
+            font-family: 'Caveat', cursive;
             color: #451a03;
             font-weight: 700;
         }
@@ -560,16 +564,23 @@
                 fill: 'none',
                 className: 'inline-block shrink-0 drop-shadow-xs'
             },
-                h('path', { d: 'M10 14L8 22H16L14 14H10Z', fill: '#78350f', stroke: '#451a03', strokeWidth: '0.8' }),
-                h('path', { d: 'M8 12L7 14.5H17L16 12H8Z', fill: '#fbbf24', stroke: '#b45309', strokeWidth: '0.8' }),
+                h('path', { d: 'M10 14L8.5 22H15.5L14 14H10Z', fill: '#78350f', stroke: '#451a03', strokeWidth: '0.8' }),
+                h('line', { x1: '11', y1: '15', x2: '10.5', y2: '21', stroke: '#451a03', strokeWidth: '0.5' }),
+                h('path', { d: 'M7.5 11.5L6.5 14.5H17.5L16.5 11.5H7.5Z', fill: '#d97706', stroke: '#92400e', strokeWidth: '0.8' }),
+                h('path', { d: 'M8 11.5L7.5 13H16.5L16 11.5H8Z', fill: '#f59e0b' }),
                 h('path', {
-                    d: 'M12 2C9.5 5 8 7.5 9 11C10 13 11 13 12 13C13 13 14 13 15 11C16 7.5 14.5 5 12 2Z',
+                    d: 'M12 1.5C9 5 7.5 7.8 8.5 11.2C9.5 13 11 13 12 13C13 13 14.5 13 15.5 11.2C16.5 7.8 15 5 12 1.5Z',
                     fill: '#f97316',
                     className: 'torch-flame-anim'
                 }),
                 h('path', {
-                    d: 'M12 5C10.5 7 9.5 8.5 10 11C10.5 12 11.2 12 12 12C12.8 12 13.5 12 14 11C14.5 8.5 13.5 7 12 5Z',
+                    d: 'M12 4C10.2 6.5 9.2 8.2 9.8 11C10.5 12.2 11.2 12.2 12 12.2C12.8 12.2 13.5 12.2 14.2 11C14.8 8.2 13.8 6.5 12 4Z',
                     fill: '#facc15',
+                    className: 'torch-flame-anim'
+                }),
+                h('path', {
+                    d: 'M12 6.5C11 8 10.5 9 10.8 10.8C11.2 11.5 11.6 11.5 12 11.5C12.4 11.5 12.8 11.5 13.2 10.8C13.5 9 13 8 12 6.5Z',
+                    fill: '#ffffff',
                     className: 'torch-flame-anim'
                 })
             );
@@ -584,30 +595,30 @@
                 className: 'inline-block shrink-0'
             },
                 h('path', {
-                    d: 'M11 6C10 4 12 3 11 1',
+                    d: 'M11 5.5C9.5 3.5 12 2 11 0.5',
                     stroke: '#94a3b8',
                     strokeWidth: '1.2',
                     strokeLinecap: 'round',
                     className: 'smoke-rise-anim'
                 }),
                 h('path', {
-                    d: 'M13 7C14 5 13 4 14 2',
+                    d: 'M13.5 6.5C14.8 4.5 13 3 14.2 1',
                     stroke: '#cbd5e1',
                     strokeWidth: '1',
                     strokeLinecap: 'round',
                     className: 'smoke-rise-anim',
                     style: { animationDelay: '0.7s' }
                 }),
-                h('path', { d: 'M10 14L8 22H16L14 14H10Z', fill: '#451a03', stroke: '#1c1917', strokeWidth: '0.8' }),
-                h('path', { d: 'M8 12L7 14.5H17L16 12H8Z', fill: '#64748b', stroke: '#334155', strokeWidth: '0.8' }),
-                h('ellipse', { cx: '12', cy: '12', rx: '3.8', ry: '1.2', fill: '#1e293b' })
+                h('path', { d: 'M10 14L8.5 22H15.5L14 14H10Z', fill: '#371c0c', stroke: '#1c1917', strokeWidth: '0.8' }),
+                h('path', { d: 'M7.5 11.5L6.5 14.5H17.5L16.5 11.5H7.5Z', fill: '#475569', stroke: '#1e293b', strokeWidth: '0.8' }),
+                h('ellipse', { cx: '12', cy: '11.5', rx: '4.2', ry: '1.4', fill: '#0f172a' })
             );
         }
 
         function ParchmentContestantTag({ player, isEliminated, isWinner, tribeName, getTribeBadgeColor, getTribeIcon }) {
             return h('div', {
-                className: `parchment-card px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-all ${
-                    isEliminated ? 'opacity-70 grayscale-[25%]' : 'hover:scale-105 shadow-sm'
+                className: `parchment-card-tan px-2.5 py-1 rounded-md flex items-center gap-1.5 transition-all ${
+                    isEliminated ? 'opacity-75 grayscale-[20%]' : 'hover:scale-105 shadow-sm'
                 }`
             },
                 isEliminated ? h(TorchUnlit, { size: 16 }) : h(TorchLit, { size: 16 }),
@@ -617,83 +628,135 @@
             );
         }
 
-        function TeamEventStackedBarChart({ roster, scores, draftState }) {
+        function TeamEventStackedBarChart({ roster, scores, draftState, eliminationOrder }) {
             const { useMemo } = React;
             
-            const categoryColors = {
-                'Immunities / Rewards': '#10b981',
-                'Advantages / Idols': '#f59e0b',
-                'Tribal Survival': '#3b82f6',
-                'Confessionals': '#8b5cf6',
-                'End of Season & Bonuses': '#ec4899',
-                'Other': '#64748b'
+            const eventColors = {
+                'Individual Immunity Win': '#10b981',
+                'Tribe Immunity Win': '#34d399',
+                'Individual Reward Win': '#059669',
+                'Tribe Reward Win': '#6ee7b7',
+                'Finds Idol': '#f59e0b',
+                'Finds Advantage': '#fbbf24',
+                'Uses Idol Correctly': '#d97706',
+                'Survived Tribal Council': '#3b82f6',
+                'Confessional': '#8b5cf6',
+                'Elimination Bonus': '#ec4899',
+                'Sole Survivor Winner Bonus': '#eab308',
+                'Other Event': '#64748b'
             };
 
-            const { maxEp, epCategoryScores } = useMemo(() => {
+            const { maxEp, epPlayerData } = useMemo(() => {
                 let highestEp = 1;
                 const map = {};
-                
+
                 roster.forEach(player => {
                     const pScores = scores[player.id] || {};
                     const bfEp = getBackfillEpisode(player.id, draftState);
+                    
                     Object.entries(pScores).forEach(([epStr, epData]) => {
                         const ep = parseInt(epStr);
                         if (!isNaN(ep)) {
                             if (ep > highestEp) highestEp = ep;
                             if (bfEp === null || ep > bfEp) {
                                 if (!map[ep]) map[ep] = {};
+                                if (!map[ep][player.id]) map[ep][player.id] = { player, totalPts: 0, events: [] };
+                                
                                 Object.values(epData || {}).forEach(score => {
-                                    const cat = score.category || 'Other';
-                                    const groupKey = cat.includes('Immunity') || cat.includes('Reward') ? 'Immunities / Rewards' :
-                                                     cat.includes('Advantage') || cat.includes('Idol') ? 'Advantages / Idols' :
-                                                     cat.includes('Tribal') || cat.includes('Survived') ? 'Tribal Survival' :
-                                                     cat.includes('Confessional') ? 'Confessionals' :
-                                                     cat.includes('End') || cat.includes('Bonus') || cat.includes('Sole') ? 'End of Season & Bonuses' : 'Other';
-                                    map[ep][groupKey] = (map[ep][groupKey] || 0) + (score.points || 0);
+                                    const pts = (score.points || 0);
+                                    if (pts !== 0) {
+                                        const eventName = score.category || 'Points Event';
+                                        let matchedCol = eventColors['Other Event'];
+                                        if (eventName.includes('Individual Immunity')) matchedCol = eventColors['Individual Immunity Win'];
+                                        else if (eventName.includes('Tribe Immunity')) matchedCol = eventColors['Tribe Immunity Win'];
+                                        else if (eventName.includes('Reward')) matchedCol = eventColors['Individual Reward Win'];
+                                        else if (eventName.includes('Idol')) matchedCol = eventColors['Finds Idol'];
+                                        else if (eventName.includes('Advantage')) matchedCol = eventColors['Finds Advantage'];
+                                        else if (eventName.includes('Tribal') || eventName.includes('Survived')) matchedCol = eventColors['Survived Tribal Council'];
+                                        else if (eventName.includes('Confessional')) matchedCol = eventColors['Confessional'];
+                                        else if (eventName.includes('Winner') || eventName.includes('Sole')) matchedCol = eventColors['Sole Survivor Winner Bonus'];
+
+                                        map[ep][player.id].totalPts += pts;
+                                        map[ep][player.id].events.push({
+                                            name: eventName,
+                                            pts: pts,
+                                            col: matchedCol,
+                                            note: score.note || ''
+                                        });
+                                    }
                                 });
                             }
                         }
                     });
+
+                    const elimEp = eliminationOrder && (eliminationOrder[player.id] || eliminationOrder[String(player.id)]);
+                    if (elimEp) {
+                        const ep = parseInt(elimEp);
+                        if (!isNaN(ep)) {
+                            if (ep > highestEp) highestEp = ep;
+                            if (bfEp === null || ep > bfEp) {
+                                if (!map[ep]) map[ep] = {};
+                                if (!map[ep][player.id]) map[ep][player.id] = { player, totalPts: 0, events: [] };
+                                map[ep][player.id].totalPts += ep;
+                                map[ep][player.id].events.push({
+                                    name: `Eliminated Placement Bonus (+${ep} pts)`,
+                                    pts: ep,
+                                    col: eventColors['Elimination Bonus'],
+                                    note: `Placed Episode ${ep}`
+                                });
+                            }
+                        }
+                    }
                 });
-                
-                return { maxEp: highestEp, epCategoryScores: map };
-            }, [roster, scores, draftState]);
+
+                return { maxEp: highestEp, epPlayerData: map };
+            }, [roster, scores, draftState, eliminationOrder]);
 
             const episodes = Array.from({ length: maxEp }, (_, i) => i + 1);
 
-            return h('div', { className: 'bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4' },
+            return h('div', { className: 'bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4 overflow-x-auto' },
                 h('div', { className: 'flex justify-between items-center mb-3 flex-wrap gap-2' },
-                    h('span', { className: 'font-bold text-xs text-gray-700 uppercase tracking-wider' }, '📊 Episode Point Category Breakdown'),
-                    h('div', { className: 'flex flex-wrap gap-2 text-[10px] font-bold' },
-                        Object.entries(categoryColors).map(([cat, col]) =>
-                            h('div', { key: cat, className: 'flex items-center gap-1' },
-                                h('span', { className: 'w-2 h-2 rounded-full', style: { backgroundColor: col } }),
-                                h('span', { className: 'text-gray-600' }, cat)
-                            )
-                        )
+                    h('div', {},
+                        h('span', { className: 'font-bold text-xs text-gray-800 uppercase tracking-wider block' }, '📊 EPISODE & PLAYER EXACT EVENT BREAKDOWN'),
+                        h('span', { className: 'text-[11px] text-gray-500 font-semibold' }, 'Grouped by Episode • Player Bars with Stacked Scoring Events')
                     )
                 ),
-                h('div', { className: 'flex items-end gap-2 h-36 pt-4 px-2 border-b border-gray-200' },
-                    episodes.map(ep => {
-                        const cats = epCategoryScores[ep] || {};
-                        const totalEpPts = Object.values(cats).reduce((a, b) => a + Math.max(0, b), 0);
-                        const maxBarPts = Math.max(25, ...episodes.map(e => Object.values(epCategoryScores[e] || {}).reduce((a, b) => a + Math.max(0, b), 0)));
-                        const heightPct = Math.min(100, (totalEpPts / maxBarPts) * 100);
 
-                        return h('div', { key: ep, className: 'flex-1 flex flex-col items-center h-full justify-end group relative' },
-                            totalEpPts > 0 && h('div', { className: 'text-[9px] font-bold text-gray-500 mb-1' }, totalEpPts),
-                            h('div', { className: 'w-full rounded-t overflow-hidden flex flex-col-reverse shadow-xs transition-all hover:brightness-105', style: { height: `${Math.max(4, heightPct)}%` } },
-                                Object.entries(cats).map(([cat, pts]) => {
-                                    if (pts <= 0) return null;
-                                    const pPct = (pts / totalEpPts) * 100;
-                                    return h('div', {
-                                        key: cat,
-                                        style: { height: `${pPct}%`, backgroundColor: categoryColors[cat] || '#64748b' },
-                                        title: `Ep ${ep} ${cat}: +${pts} pts`
-                                    });
+                h('div', { className: 'flex items-end gap-6 pt-4 pb-2 border-b border-gray-200 min-w-[600px] h-44' },
+                    episodes.map(ep => {
+                        const pMap = epPlayerData[ep] || {};
+                        const episodeTotal = roster.reduce((sum, p) => sum + (pMap[p.id] ? Math.max(0, pMap[p.id].totalPts) : 0), 0);
+
+                        return h('div', { key: ep, className: 'flex-1 flex flex-col items-center h-full justify-end bg-white/70 p-2 rounded-xl border border-gray-200/80 shadow-2xs' },
+                            h('div', { className: 'text-[10px] font-black text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full mb-1 border border-orange-200' }, `Ep ${ep}: +${episodeTotal}p`),
+                            
+                            h('div', { className: 'flex items-end gap-1.5 w-full h-full justify-center' },
+                                roster.map(player => {
+                                    const pData = pMap[player.id] || { totalPts: 0, events: [] };
+                                    const pPts = Math.max(0, pData.totalPts);
+                                    const maxP = Math.max(20, ...episodes.flatMap(e => roster.map(p => (epPlayerData[e] && epPlayerData[e][p.id]) ? epPlayerData[e][p.id].totalPts : 0)));
+                                    const heightPct = (pPts / maxP) * 100;
+
+                                    return h('div', { key: player.id, className: 'flex-1 flex flex-col items-center h-full justify-end group relative min-w-[28px]' },
+                                        pPts > 0 && h('div', { className: 'text-[9px] font-black text-gray-700 mb-0.5' }, pPts),
+                                        
+                                        h('div', { className: 'w-full rounded-t overflow-hidden flex flex-col-reverse shadow-xs transition-all hover:brightness-110 border border-gray-300/40', style: { height: `${Math.max(4, heightPct)}%` } },
+                                            pData.events.map((ev, evIdx) => {
+                                                if (ev.pts <= 0) return null;
+                                                const segPct = (ev.pts / (pPts || 1)) * 100;
+                                                return h('div', {
+                                                    key: evIdx,
+                                                    style: { height: `${segPct}%`, backgroundColor: ev.col },
+                                                    className: 'w-full transition-all hover:opacity-90',
+                                                    title: `${player.name} - Ep ${ep}: ${ev.name} (+${ev.pts} pts)${ev.note ? ` (${ev.note})` : ''}`
+                                                });
+                                            })
+                                        ),
+                                        
+                                        h('span', { className: 'text-[9px] font-bold text-gray-500 mt-1 truncate max-w-[42px]', title: player.name }, player.name.split(' ')[0])
+                                    );
                                 })
-                            ),
-                            h('span', { className: 'text-[10px] font-bold text-gray-600 mt-1' }, `E${ep}`)
+                            )
                         );
                     })
                 )
@@ -779,6 +842,7 @@
             const { useState, useMemo } = React;
             const [chartMode, setChartMode] = useState('cumulative');
             const [hoveredPoint, setHoveredPoint] = useState(null);
+            const [hoveredTeamId, setHoveredTeamId] = useState(null);
 
             const maxEpisode = useMemo(() => {
                 let maxEp = 1;
@@ -818,7 +882,10 @@
                     let cumulative = 0;
                     const history = episodes.map(ep => {
                         let epGain = 0;
+                        const playerBreakdown = [];
+
                         roster.forEach(player => {
+                            let pEpPts = 0;
                             const bfEp = getBackfillEpisode(player.id, draftState);
                             if (bfEp === null || ep > bfEp) {
                                 const playerScores = (scores[player.id] || {})[ep] || {};
@@ -826,12 +893,15 @@
                                     const pts = (score.points || 0);
                                     cumulative += pts;
                                     epGain += pts;
+                                    pEpPts += pts;
                                 });
                                 if (eliminationOrder[player.id] === ep) {
                                     cumulative += ep;
                                     epGain += ep;
+                                    pEpPts += ep;
                                 }
                             }
+                            playerBreakdown.push({ name: player.name, pts: pEpPts });
                         });
                         if (winner && ep >= 14 && roster.some(p => p.id === parseInt(winner))) {
                             if (ep === 14) {
@@ -841,10 +911,8 @@
                         }
                         if (cumulative > maxVal) maxVal = cumulative;
                         if (cumulative < minVal) minVal = cumulative;
-                        
-                        const activeCount = roster.filter(p => !eliminationOrder[p.id] || parseInt(eliminationOrder[p.id]) >= ep).length;
 
-                        return { episode: ep, score: cumulative, epGain, activeCount };
+                        return { episode: ep, score: cumulative, epGain, playerBreakdown };
                     });
 
                     return {
@@ -862,8 +930,8 @@
 
             const width = 800;
             const height = 300;
-            const paddingLeft = 55;
-            const paddingRight = 35;
+            const paddingLeft = 60;
+            const paddingRight = 40;
             const paddingTop = 30;
             const paddingBottom = 45;
             const plotWidth = width - paddingLeft - paddingRight;
@@ -891,14 +959,16 @@
                             const yPos = getY(val);
                             return h('g', { key: idx },
                                 h('line', { x1: paddingLeft, y1: yPos, x2: width - paddingRight, y2: yPos, stroke: '#f1f5f9', strokeWidth: 1.5 }),
-                                h('text', { x: paddingLeft - 8, y: yPos + 4, textAnchor: 'end', fontSize: 11, fontWeight: 'bold', fill: val < 0 ? '#ef4444' : '#64748b' }, `${val}p`)
+                                h('text', { x: paddingLeft - 10, y: yPos + 4, textAnchor: 'end', fontSize: 11, fontWeight: 'bold', fill: val < 0 ? '#ef4444' : '#64748b' }, `${val}p`)
                             );
                         }),
-                        minY < 0 && h('line', { x1: paddingLeft, y1: getY(0), x2: width - paddingRight, y2: getY(0), stroke: '#cbd5e1', strokeWidth: 2, strokeDasharray: '4 4' }),
+                        minY < 0 && h('line', { x1: paddingLeft, y1: getY(0), x2: width - paddingRight, y2: getY(0), stroke: '#94a3b8', strokeWidth: 2, strokeDasharray: '4 4' }),
                         series.map(s => {
+                            const isDimmed = hoveredTeamId && hoveredTeamId !== s.id;
                             const pointsStr = s.history.map((h, i) => `${getX(i)},${getY(h.score)}`).join(' ');
-                            return h('g', { key: s.id },
-                                h('polyline', { fill: 'none', stroke: s.style.stroke, strokeWidth: 3.5, strokeLinecap: 'round', strokeLinejoin: 'round', points: pointsStr }),
+
+                            return h('g', { key: s.id, style: { opacity: isDimmed ? 0.2 : 1, transition: 'opacity 0.2s' } },
+                                h('polyline', { fill: 'none', stroke: s.style.stroke, strokeWidth: hoveredTeamId === s.id ? 5 : 3.5, strokeLinecap: 'round', strokeLinejoin: 'round', points: pointsStr }),
                                 s.history.map((pt, i) => {
                                     const cx = getX(i);
                                     const cy = getY(pt.score);
@@ -912,7 +982,7 @@
                                         stroke: s.style.stroke,
                                         strokeWidth: 2.5,
                                         className: 'cursor-pointer transition-all',
-                                        onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: pt.episode, score: pt.score, cx, cy }),
+                                        onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: pt.episode, score: pt.score, playerBreakdown: pt.playerBreakdown, cx, cy }),
                                         onMouseLeave: () => setHoveredPoint(null)
                                     });
                                 })
@@ -930,7 +1000,7 @@
                             const yPos = getBarY(val);
                             return h('g', { key: idx },
                                 h('line', { x1: paddingLeft, y1: yPos, x2: width - paddingRight, y2: yPos, stroke: '#f1f5f9', strokeWidth: 1.5 }),
-                                h('text', { x: paddingLeft - 8, y: yPos + 4, textAnchor: 'end', fontSize: 11, fontWeight: 'bold', fill: '#64748b' }, `${val}p`)
+                                h('text', { x: paddingLeft - 10, y: yPos + 4, textAnchor: 'end', fontSize: 11, fontWeight: 'bold', fill: '#64748b' }, `${val}p`)
                             );
                         }),
                         episodes.map((ep, epIdx) => {
@@ -957,7 +1027,7 @@
                                         fill: s.style.hex,
                                         rx: 3,
                                         className: 'transition-all hover:brightness-110 cursor-pointer',
-                                        onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: ep, score: `+${gain} pts in Ep ${ep}`, cx: bx + barW/2, cy: by }),
+                                        onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: ep, score: `${gain >= 0 ? `+${gain}` : gain} pts in Ep ${ep}`, playerBreakdown: pt.playerBreakdown, cx: bx + barW/2, cy: by }),
                                         onMouseLeave: () => setHoveredPoint(null)
                                     });
                                 })
@@ -975,10 +1045,11 @@
                             const yPos = getRankY(r);
                             return h('g', { key: r },
                                 h('line', { x1: paddingLeft, y1: yPos, x2: width - paddingRight, y2: yPos, stroke: '#f1f5f9', strokeWidth: 1.5 }),
-                                h('text', { x: paddingLeft - 8, y: yPos + 4, textAnchor: 'end', fontSize: 11, fontWeight: 'bold', fill: '#f97316' }, `#${r}`)
+                                h('text', { x: paddingLeft - 10, y: yPos + 4, textAnchor: 'end', fontSize: 11, fontWeight: 'bold', fill: '#f97316' }, `Rank #${r}`)
                             );
                         }),
                         series.map(s => {
+                            const isDimmed = hoveredTeamId && hoveredTeamId !== s.id;
                             const rankHistory = episodes.map((ep, epIdx) => {
                                 const epScores = series.map(ts => ({ id: ts.id, score: ts.history[epIdx].score }));
                                 epScores.sort((a, b) => b.score - a.score);
@@ -987,8 +1058,8 @@
                             });
 
                             const pointsStr = rankHistory.map((rh, i) => `${getX(i)},${getRankY(rh.rank)}`).join(' ');
-                            return h('g', { key: s.id },
-                                h('polyline', { fill: 'none', stroke: s.style.stroke, strokeWidth: 3.5, strokeLinecap: 'round', strokeLinejoin: 'round', points: pointsStr }),
+                            return h('g', { key: s.id, style: { opacity: isDimmed ? 0.15 : 1, transition: 'opacity 0.2s' } },
+                                h('polyline', { fill: 'none', stroke: s.style.stroke, strokeWidth: hoveredTeamId === s.id ? 5 : 3.5, strokeLinecap: 'round', strokeLinejoin: 'round', points: pointsStr }),
                                 rankHistory.map((rh, i) => {
                                     const cx = getX(i);
                                     const cy = getRankY(rh.rank);
@@ -1001,45 +1072,14 @@
                                         stroke: s.style.stroke,
                                         strokeWidth: 2.5,
                                         className: 'cursor-pointer hover:scale-125 transition-all',
-                                        onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: rh.episode, score: `Rank #${rh.rank} (Ep ${rh.episode})`, cx, cy }),
-                                        onMouseLeave: () => setHoveredPoint(null)
-                                    });
-                                })
-                            );
-                        })
-                    );
-                }
-
-                if (chartMode === 'survival') {
-                    const maxActive = Math.max(4, ...series.map(s => s.roster.length));
-                    const getSurvY = (cnt) => paddingTop + plotHeight - (cnt / maxActive) * plotHeight;
-
-                    return h('g', {},
-                        Array.from({ length: maxActive + 1 }, (_, i) => i).map(cnt => {
-                            const yPos = getSurvY(cnt);
-                            return h('g', { key: cnt },
-                                h('line', { x1: paddingLeft, y1: yPos, x2: width - paddingRight, y2: yPos, stroke: '#f1f5f9', strokeWidth: 1.5 }),
-                                h('text', { x: paddingLeft - 8, y: yPos + 4, textAnchor: 'end', fontSize: 11, fontWeight: 'bold', fill: '#64748b' }, `${cnt} active`)
-                            );
-                        }),
-                        series.map(s => {
-                            const pointsStr = s.history.map((h, i) => `${getX(i)},${getSurvY(h.activeCount)}`).join(' ');
-                            return h('g', { key: s.id },
-                                h('polyline', { fill: 'none', stroke: s.style.stroke, strokeWidth: 3, strokeDasharray: '6 3', points: pointsStr }),
-                                s.history.map((pt, i) => {
-                                    const cx = getX(i);
-                                    const cy = getSurvY(pt.activeCount);
-                                    return h('circle', {
-                                        key: i,
-                                        cx,
-                                        cy,
-                                        r: 4.5,
-                                        fill: s.style.hex,
-                                        stroke: '#ffffff',
-                                        strokeWidth: 2,
-                                        className: 'cursor-pointer hover:scale-125 transition-all',
-                                        onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: pt.episode, score: `${pt.activeCount} player(s) active in Ep ${pt.episode}`, cx, cy }),
-                                        onMouseLeave: () => setHoveredPoint(null)
+                                        onMouseEnter: () => {
+                                            setHoveredTeamId(s.id);
+                                            setHoveredPoint({ teamId: s.id, teamName: s.name, episode: rh.episode, score: `Rank #${rh.rank} in Ep ${rh.episode}`, cx, cy });
+                                        },
+                                        onMouseLeave: () => {
+                                            setHoveredTeamId(null);
+                                            setHoveredPoint(null);
+                                        }
                                     });
                                 })
                             );
@@ -1048,16 +1088,18 @@
                 }
 
                 if (chartMode === 'roi') {
-                    const allDrafted = series.flatMap(s => s.roster.map(p => ({
+                    const allDrafted = series.flatMap(s => s.roster.map((p, pIdx) => ({
                         teamName: s.name,
                         color: s.style.hex,
                         name: p.name,
+                        pickIndex: pIdx + 1,
                         score: Math.max(0, Math.round(Object.values(scores[p.id] || {}).flatMap(e => Object.values(e)).reduce((a, b) => a + (b.points || 0), 0)))
                     })));
-                    allDrafted.sort((a, b) => b.score - a.score);
+
+                    allDrafted.sort((a, b) => a.pickIndex - b.pickIndex);
 
                     const maxPts = Math.max(30, ...allDrafted.map(d => d.score));
-                    const barW = Math.min(24, (plotWidth / Math.max(1, allDrafted.length)) * 0.8);
+                    const barW = Math.min(26, (plotWidth / Math.max(1, allDrafted.length)) * 0.8);
 
                     return h('g', {},
                         allDrafted.map((item, i) => {
@@ -1074,10 +1116,11 @@
                                     fill: item.color,
                                     rx: 3,
                                     className: 'hover:brightness-110 cursor-pointer transition-all',
-                                    onMouseEnter: () => setHoveredPoint({ teamId: i, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts`, cx: bx + barW/2, cy: by }),
+                                    onMouseEnter: () => setHoveredPoint({ teamId: i, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts (Pick #${item.pickIndex})`, cx: bx + barW/2, cy: by }),
                                     onMouseLeave: () => setHoveredPoint(null)
                                 }),
-                                h('text', { x: bx + barW/2, y: paddingTop + plotHeight + 15, textAnchor: 'middle', fontSize: 9, fontWeight: 'bold', fill: '#64748b' }, item.name.split(' ')[0])
+                                h('text', { x: bx + barW/2, y: paddingTop + plotHeight + 14, textAnchor: 'middle', fontSize: 9, fontWeight: 'bold', fill: '#1e293b' }, item.name.split(' ')[0]),
+                                h('text', { x: bx + barW/2, y: paddingTop + plotHeight + 25, textAnchor: 'middle', fontSize: 8, fontWeight: 'bold', fill: '#f97316' }, `Pick #${item.pickIndex}`)
                             );
                         })
                     );
@@ -1090,7 +1133,7 @@
                         h('h2', { className: 'text-2xl font-black text-gray-900 flex items-center gap-2', style: { fontFamily: '"Bebas Neue", cursive' } }, 
                             '📊 LEAGUE ANALYTICS & VISUALIZATIONS'
                         ),
-                        h('p', { className: 'text-xs text-gray-500 font-semibold' }, 'Interactive performance insights, rank trajectory, and roster efficiency')
+                        h('p', { className: 'text-xs text-gray-500 font-semibold' }, 'Interactive performance insights, rank trajectory, and draft pick efficiency')
                     ),
                     
                     h('div', { className: 'flex bg-gray-100 p-1 rounded-xl gap-1 flex-wrap text-xs font-bold border border-gray-200' },
@@ -1098,7 +1141,6 @@
                             { id: 'cumulative', label: '📈 Cumulative' },
                             { id: 'weekly', label: '📊 Weekly Gains' },
                             { id: 'rank', label: '🏆 Rank Trajectory' },
-                            { id: 'survival', label: '🕯️ Active Roster' },
                             { id: 'roi', label: '💡 Draft ROI' }
                         ].map(t => h('button', {
                             key: t.id,
@@ -1111,7 +1153,14 @@
                 ),
 
                 h('div', { className: 'flex items-center gap-2 flex-wrap text-xs font-bold mb-3' },
-                    series.map(s => h('div', { key: s.id, className: 'flex items-center gap-1.5 bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-200' },
+                    series.map(s => h('div', {
+                        key: s.id,
+                        onMouseEnter: () => setHoveredTeamId(s.id),
+                        onMouseLeave: () => setHoveredTeamId(null),
+                        className: `flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                            hoveredTeamId === s.id ? 'bg-orange-100 border-orange-300 scale-105 shadow-xs' : 'bg-gray-50 border-gray-200'
+                        }`
+                    },
                         h('span', { className: `w-3 h-3 rounded-full ${s.style.bg}` }),
                         h('span', { className: 'text-gray-800' }, `${s.name}:`),
                         h('span', { className: 'font-extrabold text-orange-600' }, `${s.currentScore} pts`)
@@ -1140,15 +1189,21 @@
                     ),
 
                     hoveredPoint && h('div', {
-                        className: 'absolute z-20 bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-xl border border-slate-700 pointer-events-none transform -translate-x-1/2 -translate-y-full',
+                        className: 'absolute z-20 bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-2xl border border-slate-700 pointer-events-none transform -translate-x-1/2 -translate-y-full min-w-[150px]',
                         style: {
                             left: `${(hoveredPoint.cx / width) * 100}%`,
                             top: `${(hoveredPoint.cy / height) * 100}%`,
-                            marginTop: '-8px'
+                            marginTop: '-10px'
                         }
                     },
-                        h('div', { className: 'text-orange-400 font-extrabold' }, hoveredPoint.teamName),
-                        h('div', { className: 'text-slate-200' }, hoveredPoint.score)
+                        h('div', { className: 'text-orange-400 font-black border-b border-slate-800 pb-1 mb-1' }, `${hoveredPoint.teamName} ${typeof hoveredPoint.score === 'number' ? `(Ep ${hoveredPoint.episode}: ${hoveredPoint.score} pts)` : ''}`),
+                        typeof hoveredPoint.score === 'string' && h('div', { className: 'text-slate-200 font-bold mb-1' }, hoveredPoint.score),
+                        hoveredPoint.playerBreakdown && Array.isArray(hoveredPoint.playerBreakdown) && h('div', { className: 'space-y-0.5 pt-0.5' },
+                            hoveredPoint.playerBreakdown.map((p, pIdx) => h('div', { key: pIdx, className: 'flex justify-between items-center text-[11px] text-slate-300' },
+                                h('span', { className: 'text-slate-400 font-semibold' }, p.name),
+                                h('span', { className: `font-bold ${p.pts > 0 ? 'text-emerald-400' : p.pts < 0 ? 'text-red-400' : 'text-slate-500'}` }, `${p.pts > 0 ? '+' : ''}${p.pts} pts`)
+                            ))
+                        )
                     )
                 )
             );
@@ -2216,17 +2271,34 @@
                                         className: 'flex justify-between items-center cursor-pointer',
                                         onClick: () => toggleTeamExpanded(team.id)
                                     },
-                                        h('div', { className: 'flex items-center gap-4 flex-wrap' },
+                                        h('div', { className: 'flex items-center gap-4 flex-wrap flex-1' },
                                             h('div', { 
                                                 className: `text-3xl font-black ${team.textColor}`,
                                                 style: { fontFamily: '"Bebas Neue", cursive' }
                                             }, `#${index + 1}`),
                                             h('div', {},
                                                 h('div', { className: `text-2xl font-bold ${team.textColor}` }, team.name),
-                                                h('div', { className: 'text-sm text-gray-600' }, `${team.roster.length} players`)
+                                                h('div', { className: 'text-xs text-gray-500 font-semibold' }, `${team.roster.length} players`)
+                                            ),
+                                            // Survivor Parchment Vote Cards (Arranged in-line with team name)
+                                            team.roster.length > 0 && h('div', { className: 'flex flex-wrap items-center gap-2 ml-2' },
+                                                team.roster.map(player => {
+                                                    const isElim = eliminationOrder && eliminationOrder[player.id];
+                                                    const isWin = winner && parseInt(winner) === player.id;
+                                                    const currTribe = typeof window.getTribeForEpisode === 'function' ? window.getTribeForEpisode(player, 99) : (player.tribe || player.startingTribe);
+                                                    return h(ParchmentContestantTag, {
+                                                        key: player.id,
+                                                        player: player,
+                                                        isEliminated: isElim,
+                                                        isWinner: isWin,
+                                                        tribeName: currTribe,
+                                                        getTribeBadgeColor: getTribeBadgeColor,
+                                                        getTribeIcon: getTribeIcon
+                                                    });
+                                                })
                                             )
                                         ),
-                                        h('div', { className: 'flex items-center gap-3' },
+                                        h('div', { className: 'flex items-center gap-3 shrink-0 ml-4' },
                                             h('div', { className: `text-4xl font-black ${team.textColor}` }, team.score),
                                             h(Icons.ChevronDown, { 
                                                 size: 24,
@@ -2238,31 +2310,13 @@
                                         )
                                     ),
                                     
-                                    // Survivor Parchment Vote Cards (Collapsed/Always Visible Team Roster)
-                                    team.roster.length > 0 && h('div', { className: 'flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-200/60' },
-                                        team.roster.map(player => {
-                                            const isElim = eliminationOrder && eliminationOrder[player.id];
-                                            const isWin = winner && parseInt(winner) === player.id;
-                                            const currTribe = typeof window.getTribeForEpisode === 'function' ? window.getTribeForEpisode(player, 99) : (player.tribe || player.startingTribe);
-                                            return h(ParchmentContestantTag, {
-                                                key: player.id,
-                                                player: player,
-                                                isEliminated: isElim,
-                                                isWinner: isWin,
-                                                tribeName: currTribe,
-                                                getTribeBadgeColor: getTribeBadgeColor,
-                                                getTribeIcon: getTribeIcon
-                                            });
-                                        })
-                                    ),
-                                    
                                     // Expanded player breakdown & Team Deep-Dive Analytics
                                     expandedTeams[team.id] ? h('div', { className: 'mt-4 pt-4 border-t-2 border-gray-200 space-y-4' },
                                         // 1. Roster Point Contribution Donut Chart
                                         h(TeamRosterDonutChart, { roster: team.roster, getPlayerScore: getPlayerScore }),
                                         
                                         // 2. Episode Point Category Stacked Bar Chart
-                                        h(TeamEventStackedBarChart, { roster: team.roster, scores: scores, draftState: draftState }),
+                                        h(TeamEventStackedBarChart, { roster: team.roster, scores: scores, draftState: draftState, eliminationOrder: eliminationOrder }),
 
                                         // 3. Detailed Player Breakdown List
                                         team.roster.length === 0 ? 
