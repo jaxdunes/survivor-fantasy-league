@@ -814,6 +814,80 @@
             );
         }
 
+        function TeamRosterDonutChart({ roster, getPlayerScore }) {
+            const { useMemo } = React;
+            const playerColors = ['#f97316', '#3b82f6', '#10b981', '#ec4899', '#8b5cf6', '#f59e0b', '#06b6d4'];
+            
+            const data = useMemo(() => {
+                let total = 0;
+                const items = roster.map((p, idx) => {
+                    const score = Math.max(0, getPlayerScore(p.id));
+                    total += score;
+                    return {
+                        id: p.id,
+                        name: p.name,
+                        score: score,
+                        color: playerColors[idx % playerColors.length]
+                    };
+                });
+                return { total, items };
+            }, [roster, getPlayerScore]);
+
+            if (data.total === 0) return null;
+
+            let accumulatedAngle = 0;
+            const size = 120;
+            const radius = 45;
+            const strokeWidth = 14;
+            const center = size / 2;
+            const circumference = 2 * Math.PI * radius;
+
+            return h('div', { className: 'bg-slate-900/90 border border-amber-500/30 rounded-xl p-3.5 mb-4 flex items-center justify-between flex-wrap gap-4 backdrop-blur-md shadow-lg' },
+                h('div', { className: 'flex items-center gap-4 flex-wrap' },
+                    h('div', { className: 'relative w-28 h-28 shrink-0 flex items-center justify-center' },
+                        h('svg', { width: size, height: size, viewBox: `0 0 ${size} ${size}`, className: 'transform -rotate-90' },
+                            data.items.map(item => {
+                                if (item.score <= 0) return null;
+                                const strokeDasharray = `${(item.score / data.total) * circumference} ${circumference}`;
+                                const strokeDashoffset = -accumulatedAngle;
+                                accumulatedAngle += (item.score / data.total) * circumference;
+
+                                return h('circle', {
+                                    key: item.id,
+                                    cx: center,
+                                    cy: center,
+                                    r: radius,
+                                    fill: 'transparent',
+                                    stroke: item.color,
+                                    strokeWidth: strokeWidth,
+                                    strokeDasharray: strokeDasharray,
+                                    strokeDashoffset: strokeDashoffset,
+                                    className: 'transition-all duration-300 hover:opacity-80'
+                                });
+                            })
+                        ),
+                        h('div', { className: 'absolute inset-0 flex flex-col items-center justify-center text-center' },
+                            h('span', { className: 'text-[10px] text-amber-300/80 font-bold uppercase tracking-xs' }, 'Total'),
+                            h('span', { className: 'text-lg font-black text-amber-100 leading-none' }, data.total)
+                        )
+                    ),
+                    h('div', {},
+                        h('div', { className: 'font-extrabold text-xs text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1.5' }, '🍩 Roster Point Contribution'),
+                        h('div', { className: 'space-y-1.5' },
+                            data.items.map(item => {
+                                const pct = Math.round((item.score / data.total) * 100) || 0;
+                                return h('div', { key: item.id, className: 'flex items-center gap-2 text-xs font-semibold' },
+                                    h('span', { className: 'w-2.5 h-2.5 rounded-full shrink-0 shadow-xs', style: { backgroundColor: item.color } }),
+                                    h('span', { className: 'text-slate-200 font-bold' }, item.name),
+                                    h('span', { className: 'text-amber-400 font-extrabold ml-auto' }, `${item.score} pts (${pct}%)`)
+                                );
+                            })
+                        )
+                    )
+                )
+            );
+        }
+
         function TeamScoreGraph({ leaderboard, scores, eliminationOrder, winner, playerTeams, players, draftState }) {
             const { useState, useMemo } = React;
             const [chartMode, setChartMode] = useState('cumulative');
@@ -873,7 +947,7 @@
                                     epGain += pts;
                                     pEpPts += pts;
                                 });
-                                if (eliminationOrder[player.id] === ep) {
+                                if (eliminationOrder && (eliminationOrder[player.id] === ep || eliminationOrder[String(player.id)] === ep)) {
                                     cumulative += ep;
                                     epGain += ep;
                                     pEpPts += ep;
@@ -917,7 +991,7 @@
             const height = 300;
             const paddingLeft = 60;
             const paddingRight = 40;
-            const paddingTop = 35;
+            const paddingTop = 38;
             const paddingBottom = 45;
             const plotWidth = width - paddingLeft - paddingRight;
             const plotHeight = height - paddingTop - paddingBottom;
@@ -926,8 +1000,13 @@
             const maxY = Math.max(30, Math.ceil((maxScoreVal + 10) / 20) * 20);
             const domainY = maxY - minY || 1;
 
-            const getX = (epIndex) => {
+            const barOffsetMargin = 28;
+            const getX = (epIndex, isBarChart = false) => {
                 if (episodes.length <= 1) return paddingLeft + plotWidth / 2;
+                if (isBarChart) {
+                    const availableW = plotWidth - barOffsetMargin * 2;
+                    return paddingLeft + barOffsetMargin + (epIndex / (episodes.length - 1)) * availableW;
+                }
                 return paddingLeft + (epIndex / (episodes.length - 1)) * plotWidth;
             };
 
@@ -943,11 +1022,11 @@
                         gridSteps.map((val, idx) => {
                             const yPos = getY(val);
                             return h('g', { key: idx },
-                                h('line', { x1: paddingLeft, y1: yPos, x2: width - paddingRight, y2: yPos, stroke: '#f1f5f9', strokeWidth: 1.5 }),
-                                h('text', { x: paddingLeft - 10, y: yPos + 4, textAnchor: 'end', fontSize: 11, fontWeight: 'bold', fill: val < 0 ? '#ef4444' : '#64748b' }, `${val}p`)
+                                h('line', { x1: paddingLeft, y1: yPos, x2: width - paddingRight, y2: yPos, stroke: '#334155', strokeWidth: 1 }),
+                                h('text', { x: paddingLeft - 10, y: yPos + 4, textAnchor: 'end', fontSize: 11, fontWeight: 'bold', fill: val < 0 ? '#f87171' : '#94a3b8' }, `${val}p`)
                             );
                         }),
-                        minY < 0 && h('line', { x1: paddingLeft, y1: getY(0), x2: width - paddingRight, y2: getY(0), stroke: '#94a3b8', strokeWidth: 2, strokeDasharray: '4 4' }),
+                        minY < 0 && h('line', { x1: paddingLeft, y1: getY(0), x2: width - paddingRight, y2: getY(0), stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '4 4' }),
                         series.map(s => {
                             const isDimmed = hoveredTeamId && hoveredTeamId !== s.id;
                             const pointsStr = s.history.map((h, i) => `${getX(i)},${getY(h.score)}`).join(' ');
@@ -991,12 +1070,12 @@
                         [0, Math.round(maxEpGain * 0.5), maxEpGain].map((val, idx) => {
                             const yPos = getBarY(val);
                             return h('g', { key: idx },
-                                h('line', { x1: paddingLeft, y1: yPos, x2: width - paddingRight, y2: yPos, stroke: '#f1f5f9', strokeWidth: 1.5 }),
-                                h('text', { x: paddingLeft - 10, y: yPos + 4, textAnchor: 'end', fontSize: 11, fontWeight: 'bold', fill: '#64748b' }, `${val}p`)
+                                h('line', { x1: paddingLeft, y1: yPos, x2: width - paddingRight, y2: yPos, stroke: '#334155', strokeWidth: 1 }),
+                                h('text', { x: paddingLeft - 10, y: yPos + 4, textAnchor: 'end', fontSize: 11, fontWeight: 'bold', fill: '#94a3b8' }, `${val}p`)
                             );
                         }),
                         episodes.map((ep, epIdx) => {
-                            const groupCenterX = getX(epIdx);
+                            const groupCenterX = getX(epIdx, true);
                             const totalSeries = series.length;
                             const barW = Math.min(14, (plotWidth / (episodes.length * totalSeries)) * 0.85);
                             const groupW = totalSeries * barW;
@@ -1018,7 +1097,7 @@
                                         height: bh,
                                         fill: s.style.hex,
                                         rx: 3,
-                                        className: 'transition-all hover:brightness-110 cursor-pointer',
+                                        className: 'transition-all hover:brightness-125 cursor-pointer',
                                         onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: ep, score: `${gain >= 0 ? `+${gain}` : gain} pts in Ep ${ep}`, cx: bx + barW/2, cy: by }),
                                         onMouseLeave: () => setHoveredPoint(null)
                                     });
@@ -1036,7 +1115,7 @@
                         Array.from({ length: totalTeams }, (_, i) => i + 1).map(r => {
                             const yPos = getRankY(r);
                             return h('g', { key: r },
-                                h('line', { x1: paddingLeft, y1: yPos, x2: width - paddingRight, y2: yPos, stroke: '#f1f5f9', strokeWidth: 1.5 }),
+                                h('line', { x1: paddingLeft, y1: yPos, x2: width - paddingRight, y2: yPos, stroke: '#334155', strokeWidth: 1 }),
                                 h('text', { x: paddingLeft - 10, y: yPos + 4, textAnchor: 'end', fontSize: 11, fontWeight: 'bold', fill: '#f97316' }, `Rank #${r}`)
                             );
                         }),
@@ -1109,8 +1188,18 @@
                             const bh = (item.score / maxPts) * plotHeight;
                             const by = paddingTop + plotHeight - bh;
 
+                            const renderDivider = i > 0 && i % numTeams === 0;
+                            const prevBx = paddingLeft + ((i - 1) / Math.max(1, allDrafted.length - 1)) * (plotWidth - barW);
+                            const divX = (prevBx + barW + bx) / 2;
+
                             return h('g', { key: i },
-                                // Format Pick Number [Round].[Pick] on top of graph
+                                // Vertical Round Divider Line between Round N and Round N+1
+                                renderDivider && h('g', { key: 'div-' + i },
+                                    h('line', { x1: divX, y1: paddingTop - 16, x2: divX, y2: paddingTop + plotHeight + 4, stroke: '#f59e0b', strokeWidth: 1.5, strokeDasharray: '4 3', opacity: 0.6 }),
+                                    h('text', { x: divX + 4, y: paddingTop - 18, fontSize: 9, fontWeight: '900', fill: '#fbbf24' }, `R${roundNum}`)
+                                ),
+
+                                // Pick Number [Round].[Pick] on top of bar
                                 h('text', { x: bx + barW/2, y: Math.max(paddingTop - 6, by - 6), textAnchor: 'middle', fontSize: 10, fontWeight: '900', fill: '#f97316' }, pickFormatted),
 
                                 h('rect', {
@@ -1120,13 +1209,13 @@
                                     height: bh,
                                     fill: item.color,
                                     rx: 3,
-                                    className: 'hover:brightness-110 cursor-pointer transition-all',
+                                    className: 'hover:brightness-125 cursor-pointer transition-all',
                                     onMouseEnter: () => setHoveredPoint({ teamId: i, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts (Pick ${pickFormatted})`, cx: bx + barW/2, cy: by }),
                                     onMouseLeave: () => setHoveredPoint(null)
                                 }),
 
-                                // Castaway name in high contrast legible slate text below X-axis
-                                h('text', { x: bx + barW/2, y: paddingTop + plotHeight + 16, textAnchor: 'middle', fontSize: 9, fontWeight: '800', fill: '#334155' }, item.name.split(' ')[0])
+                                // Castaway name in crisp bright off-white text below X-axis
+                                h('text', { x: bx + barW/2, y: paddingTop + plotHeight + 16, textAnchor: 'middle', fontSize: 9, fontWeight: '800', fill: '#f8fafc' }, item.name.split(' ')[0])
                             );
                         })
                     );
@@ -1144,7 +1233,7 @@
 
                 let translateX = '-50%';
                 if (isNearRight) translateX = '-88%';
-                if (isNearLeft) translateX = '-12%';
+                if (isNearLeft) translateX = '-10%';
 
                 let translateY = isNearTop ? '15px' : 'calc(-100% - 14px)';
 
@@ -1155,16 +1244,16 @@
                 };
             };
 
-            return h('div', { className: 'bg-white/95 backdrop-blur-md rounded-2xl p-6 mb-8 shadow-xl border border-gray-100' },
+            return h('div', { className: 'bg-slate-900/90 backdrop-blur-md rounded-2xl p-6 mb-8 shadow-2xl border border-amber-500/30 text-slate-100' },
                 h('div', { className: 'flex justify-between items-center mb-4 flex-wrap gap-3' },
                     h('div', {},
-                        h('h2', { className: 'text-2xl font-black text-gray-900 flex items-center gap-2', style: { fontFamily: '"Bebas Neue", cursive' } }, 
+                        h('h2', { className: 'text-2xl font-black flex items-center gap-2 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-200 bg-clip-text text-transparent', style: { fontFamily: '"Bebas Neue", cursive' } }, 
                             '📊 LEAGUE ANALYTICS & VISUALIZATIONS'
                         ),
-                        h('p', { className: 'text-xs text-gray-500 font-semibold' }, 'Interactive performance insights, rank trajectory, and draft pick efficiency')
+                        h('p', { className: 'text-xs text-amber-200/70 font-medium' }, 'Interactive performance insights, rank trajectory, and draft pick efficiency')
                     ),
                     
-                    h('div', { className: 'flex bg-gray-100 p-1 rounded-xl gap-1 flex-wrap text-xs font-bold border border-gray-200' },
+                    h('div', { className: 'flex bg-slate-950/80 p-1.5 rounded-xl gap-1.5 flex-wrap text-xs font-bold border border-amber-900/60 shadow-inner' },
                         [
                             { id: 'cumulative', label: '📈 Cumulative' },
                             { id: 'weekly', label: '📊 Weekly Gains' },
@@ -1174,7 +1263,7 @@
                             key: t.id,
                             onClick: () => setChartMode(t.id),
                             className: `px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                                chartMode === t.id ? 'bg-orange-500 text-white shadow-sm font-extrabold' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-200/60'
+                                chartMode === t.id ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white font-black shadow-md border border-amber-400/50 scale-105' : 'text-amber-200/70 hover:text-white hover:bg-slate-800/80'
                             }`
                         }, t.label))
                     )
@@ -1186,12 +1275,12 @@
                         onMouseEnter: () => setHoveredTeamId(s.id),
                         onMouseLeave: () => setHoveredTeamId(null),
                         className: `flex items-center gap-1.5 px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                            hoveredTeamId === s.id ? 'bg-orange-100 border-orange-300 scale-105 shadow-xs' : 'bg-gray-50 border-gray-200'
+                            hoveredTeamId === s.id ? 'bg-amber-950 border-amber-500/80 scale-105 shadow-xs text-amber-200' : 'bg-slate-800/80 border-amber-900/40 text-slate-300'
                         }`
                     },
                         h('span', { className: `w-3 h-3 rounded-full ${s.style.bg}` }),
-                        h('span', { className: 'text-gray-800' }, `${s.name}:`),
-                        h('span', { className: 'font-extrabold text-orange-600' }, `${s.currentScore} pts`)
+                        h('span', {}, `${s.name}:`),
+                        h('span', { className: 'font-extrabold text-amber-400' }, `${s.currentScore} pts`)
                     ))
                 ),
 
@@ -1203,7 +1292,7 @@
                         renderChartContent(),
                         
                         chartMode !== 'roi' && episodes.map((ep, idx) => {
-                            const xPos = getX(idx);
+                            const xPos = getX(idx, chartMode === 'weekly');
                             return h('text', {
                                 key: ep,
                                 x: xPos,
@@ -1211,7 +1300,7 @@
                                 textAnchor: 'middle',
                                 fontSize: 11,
                                 fontWeight: 'bold',
-                                fill: '#64748b'
+                                fill: '#94a3b8'
                             }, `Ep ${ep}`);
                         })
                     ),
@@ -2306,7 +2395,10 @@
                                             }, `#${index + 1}`),
                                             h('div', {},
                                                 h('div', { className: `text-2xl font-bold ${team.textColor}` }, team.name),
-                                                h('div', { className: 'text-xs text-gray-500 font-semibold' }, `${team.roster.length} players`)
+                                                (() => {
+                                                    const activeCount = team.roster.filter(p => !eliminationOrder || (!eliminationOrder[p.id] && !eliminationOrder[String(p.id)])).length;
+                                                    return h('div', { className: 'text-xs text-gray-500 font-semibold' }, `${activeCount} of ${team.roster.length} active players`);
+                                                })()
                                             ),
                                             // Survivor Parchment Vote Cards (Arranged in-line with team name)
                                             team.roster.length > 0 && h('div', { className: 'flex flex-wrap items-center gap-2 ml-2' },
