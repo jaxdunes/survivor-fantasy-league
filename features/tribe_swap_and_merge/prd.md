@@ -1,10 +1,10 @@
 # Product Requirements Document (PRD): Dynamic Tribe Swap, Merge & Custom Tribe Management
 
-**Version**: 1.2 (Season-Wide Propagation Update)  
-**Status**: Pending Final Review  
+**Version**: 2.0 (Completed & Merged)  
+**Status**: Completed & Merged into `main` (Commit: `0f3f29c`)  
 **Location**: `features/tribe_swap_and_merge/prd.md`  
-**Target Files**: `js/scoring-engine.js`, `js/api.js`, `js/config.js`, `draft.html`, `seasons/season-51.json`  
-**Git Branch**: `feature/tribe-swap-and-merge`  
+**Target Files**: `js/scoring-engine.js`, `js/api.js`, `js/config.js`, `draft.html`, `index.html`, `seasons/season-51.json`  
+**Git Branch**: `main` (merged from `feature/tribe-swap-and-merge`)  
 
 ---
 
@@ -12,7 +12,7 @@
 
 The **Dynamic Tribe Swap, Merge & Custom Tribe Management** feature brings full episode-aware tribe management to the Survivor Fantasy League application. In Survivor, tribes shift frequently through tribe swaps (e.g., expanding from 2 to 3 tribes), individual player swaps, and the iconic Merge event. 
 
-This feature enables league admins and users to seamlessly update player tribe affiliations for specific episodes without affecting past episode scoring, historical roster records, or previous point breakdowns.
+This feature enables league admins and users to seamlessly update player tribe affiliations for specific episodes without affecting past episode scoring, historical roster records, or previous point breakdowns. All changes persist at the **Season Node** level (`seasons/{seasonId}`), propagating automatically across all fantasy leagues playing that season.
 
 ### Core Objectives:
 1. **Season-Wide Propagation Across All Leagues**: Tribe assignments, tribe swaps, merges, and custom tribes are bound to the core **Season dataset** (e.g., `seasons/season-51`). Any tribe swap or merge performed in one league automatically reflects across **all leagues** participating in that season.
@@ -147,12 +147,36 @@ We have aligned with your preferences and refined the feature architecture:
 
 ## 6. Success Criteria & Verification Checklist
 
-- [ ] Isolated test database (`dev_testing/`) verified during local testing; live data untouched.
-- [ ] Tribe swap executed in one league automatically updates player tribe in all other leagues running that season.
-- [ ] Single-player Edit button rendered ONLY on `draft.html` player cards.
-- [ ] Episode dropdown defaults to active scoring episode or `lastScoredEpisode + 1`.
-- [ ] Changing a player's tribe on Episode 3 updates `tribeHistory`, moving them starting Ep 3 while keeping Ep 1-2 unchanged.
-- [ ] Custom Tribe creation (Name + Primary Color) updates all dropdowns, filters, and "Add Points" tribe grid instantly across all leagues.
-- [ ] Drag & Drop visual bulk edit screen allows dragging player buttons between tribe shape containers and committing on "Save".
-- [ ] "Merge All Players" button lists all players to be merged in confirmation modal and awards Merge points based on active scoring event rules.
-- [ ] Player card event logs display `"Merged"` for merge events and `"Tribe Swap"` for other tribe changes.
+- [x] Isolated test database (`dev_testing/`) verified during local testing; live data untouched.
+- [x] Tribe swap executed in one league automatically updates player tribe in all other leagues running that season.
+- [x] Single-player Edit button rendered ONLY on `draft.html` player cards.
+- [x] Episode dropdown defaults to active scoring episode or `lastScoredEpisode + 1`.
+- [x] Changing a player's tribe on Episode 3 updates `tribeHistory`, moving them starting Ep 3 while keeping Ep 1-2 unchanged.
+- [x] Custom Tribe creation (Name + Primary Color) updates all dropdowns, filters, and "Add Points" tribe grid instantly across all leagues.
+- [x] Drag & Drop visual bulk edit screen allows dragging player buttons between tribe shape containers and committing on "Save".
+- [x] "Merge All Players" button lists all players to be merged in confirmation modal and awards Merge points based on active scoring event rules.
+- [x] Player card event logs display `"Merged"` for merge events and `"Tribe Swap"` for other tribe changes.
+
+---
+
+## 7. Delivered Refinements & User Feedback Log
+
+During interactive development and testing, the following design refinements and bug fixes were implemented:
+
+1. **Circular Tribe Color Dots replacing Emojis**:
+   - Replaced tribe emoji icons across all screens (`draft.html`, `index.html`, scoring engine) with clean circular tribe color dots (`getTribeDotColor` / `getTribeIcon`).
+2. **Timeline Drawer Event Deletion**:
+   - Removed top-badge pill deletion buttons. Added red `✕` delete buttons next to individual tribe events inside the expanded "Episode History & Timeline" drawer on player cards.
+   - Deleting the starting tribe event sets the contestant to `"Unassigned"`.
+3. **Unassigned Tribe State & Subtle Bulk Styling**:
+   - Added `"Unassigned"` tribe support across the system.
+   - Styled the `Unassigned` container in bulk edit modal to be subtly dark (`bg-slate-950/40 border border-slate-800/80`) rather than bright white.
+4. **Bulk Edit Modal Cleanups**:
+   - Removed floppy disk emoji (`💾`) from "Save Changes" button.
+   - Omitted "Tribe assignment for episodes prior to Episode 1 will remain unchanged" helper text when Episode 1 is selected.
+5. **No-Op Swap Validation Guard**:
+   - Prevented saving a tribe swap if the selected tribe matches the contestant's active tribe for that episode (e.g. Savu ➔ Savu).
+6. **Single Edit Live Badge Preview**:
+   - Replaced plain select option text with a live styled tribe badge preview in the Single Tribe Edit modal.
+7. **Add Points Episode Tribe Sync**:
+   - Updated contestant selection buttons in the Add Points modal to dynamically evaluate both bucket placement and contestant tribe pill badges using `getTribeForEpisode(player, selectedEpisode)`.

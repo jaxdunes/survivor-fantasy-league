@@ -1,13 +1,13 @@
 # Implementation Plan: Dynamic Tribe Swap, Merge & Custom Tribe Management
 
-**Target Branch**: `feature/tribe-swap-and-merge`  
+**Target Branch**: `main` (merged from `feature/tribe-swap-and-merge`)  
 **Location**: `features/tribe_swap_and_merge/implementation_plan.md`  
-**Status**: Pending User Review  
+**Status**: Completed & Merged into `main` (Commit: `0f3f29c`)  
 
 ---
 
-> [!IMPORTANT]
-> **User Alignment & Review Gate**: This plan incorporates the Season-Wide Propagation update. Please review before code execution begins.
+> [!NOTE]
+> **Implementation Complete**: All feature phases, season-wide propagation, UI refinements, and testing directives have been executed and merged into `main`.
 > 
 > **Live Data Safety Directive**: All testing must be conducted strictly using isolated test datasets (`dev_testing/` database path under local dev environment). Live production database instances must remain untouched.
 
@@ -160,8 +160,27 @@
 
 ---
 
-## User Review & Alignment
+## Execution Summary & Delivered Feature Set
 
-Both the PRD (`features/tribe_swap_and_merge/prd.md`) and Implementation Plan (`features/tribe_swap_and_merge/implementation_plan.md`) have been updated to mandate **Season-Wide Propagation Across All Leagues**. 
+All phases of this implementation plan have been completed and verified:
 
-Please review and confirm if you are ready for execution!
+1. **Global Season-Wide Data Architecture**:
+   - `tribeHistory` and `customTribes` are persisted directly under `seasons/{seasonId}` in Firebase Realtime Database and synced across all leagues via `seasonRef.on('value')`.
+2. **Pure Engine Utilities (`js/scoring-engine.js`)**:
+   - Implemented `getTribeForEpisode(player, epNum)` to resolve episode-specific tribe membership.
+   - Implemented `getPlayerTribeProgression(player)` to build structured event timeline histories.
+   - Implemented `getSmartDefaultEpisode(...)` to auto-select current active or next scoring episode.
+   - Implemented `getTribeStyle(...)` and `getTribeDotColor(...)` for consistent tribe color dots.
+3. **Single Player Edit Tribe Modal (`draft.html`)**:
+   - Created `#edit-player-tribe-modal` with live styled tribe badge preview and episode selection.
+   - Added duplicate swap validation guard preventing no-op saves (e.g. Savu ➔ Savu).
+4. **Visual Drag & Drop Bulk Tribe Reorganization (`draft.html`)**:
+   - Created full-screen visual bulk edit modal with draggable player buttons and styled tribe shape containers.
+   - Added styled `"Unassigned"` tribe container (`bg-slate-950/40 border border-slate-800/80`).
+   - Added 1-click **"Merge All Players"** button with confirmation modal listing all active players and automatic merge point awards.
+5. **Player Card Timeline Drawer & Deletion**:
+   - Rendered "Episode History & Timeline" drawer inside player cards.
+   - Added red `✕` delete buttons per event allowing deletion of any tribe event (including starting tribe, which resets player to `Unassigned`).
+6. **Add Points Menu Sync (`index.html`)**:
+   - Grouped player selection into tribe buckets dynamically via `getTribeForEpisode(player, selectedEpisode)`.
+   - Updated individual player button badges to evaluate `getTribeForEpisode(player, selectedEpisode)`.
