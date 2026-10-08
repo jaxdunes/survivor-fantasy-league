@@ -244,11 +244,12 @@ function getPlayerEventsTimeline(player, scores, eliminationOrder) {
         else if (th.tribe === 'Cila') icon = '🔥';
         else if (th.tribe === 'Kalo') icon = '🌊';
         else if (th.tribe === 'Vatu') icon = '⚡';
+        else if (th.tribe === 'Unassigned') icon = '⚪';
 
         let title = th.label || `Tribe: ${th.tribe}`;
         if (th.type === 'starting') title = `Assigned to Starting Tribe: ${th.tribe}`;
-        else if (th.type === 'swap') title = `🔄 Tribe Swap: Transferred to ${th.tribe} Tribe`;
-        else if (th.type === 'merge') title = `🏝️ Made Merge: Joined ${th.tribe} Merge Tribe`;
+        else if (th.type === 'swap' || th.type === 'Tribe Swap') title = `🔄 Tribe Swap: Transferred to ${th.tribe} Tribe`;
+        else if (th.type === 'merge' || th.type === 'Merged') title = `🤝 Merged: Joined ${th.tribe} Tribe`;
 
         timelineByEpisode[ep].push({
             id: `tribe-${ep}-${th.tribe}`,

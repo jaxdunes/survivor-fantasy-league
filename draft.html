@@ -252,6 +252,22 @@
             color: #fde68a !important;
             text-shadow: 0 0 10px rgba(245, 158, 11, 0.35) !important;
         }
+
+        /* Cancel & Neutral Buttons in Tribal Theme */
+        body.theme-tribal button.bg-gray-200,
+        body.theme-tribal button.bg-slate-200,
+        body.theme-tribal .bg-gray-200 {
+            background-color: rgba(45, 32, 24, 0.9) !important;
+            color: #e6dad0 !important;
+            border: 1px solid rgba(217, 119, 6, 0.35) !important;
+        }
+
+        body.theme-tribal button.bg-gray-200:hover,
+        body.theme-tribal button.bg-slate-200:hover {
+            background-color: rgba(75, 52, 40, 0.95) !important;
+            color: #ffffff !important;
+            border-color: rgba(245, 158, 11, 0.6) !important;
+        }
     </style>
 </head>
 <body>
@@ -438,8 +454,26 @@
 
             const [scores, setScores] = useState({});
             const [eliminationOrder, setEliminationOrder] = useState({});
+            const [scoredEpisodes, setScoredEpisodes] = useState({});
+            const [currentEpisode, setCurrentEpisode] = useState(1);
 
-            // Load scores & eliminationOrder
+            // Tribe Management State
+            const [editingPlayer, setEditingPlayer] = useState(null);
+            const [singleEditEpisode, setSingleEditEpisode] = useState(1);
+            const [singleEditTribe, setSingleEditTribe] = useState('');
+            
+            const [showAddCustomTribeModal, setShowAddCustomTribeModal] = useState(false);
+            const [customTribeName, setCustomTribeName] = useState('');
+            const [customTribeColor, setCustomTribeColor] = useState('green');
+            const [customTribeEmoji, setCustomTribeEmoji] = useState('🌿');
+
+            const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+            const [bulkEditEpisode, setBulkEditEpisode] = useState(1);
+            const [bulkAssignments, setBulkAssignments] = useState({});
+            const [draggedPlayerId, setDraggedPlayerId] = useState(null);
+            const [showConfirmMergeModal, setShowConfirmMergeModal] = useState(false);
+
+            // Load scores, eliminationOrder, scoredEpisodes & currentEpisode
             useEffect(() => {
                 if (!window.firebaseInitialized) {
                     const savedScores = localStorage.getItem(`survivor-scores-${activeLeagueId}-${activeSeasonId}`);
@@ -451,13 +485,19 @@
                 const seasonBasePath = `leagues/${activeLeagueId}/seasons/${activeSeasonId}`;
                 const scoresRef = database.ref(`${seasonBasePath}/scores`);
                 const elimRef = database.ref(`${seasonBasePath}/eliminationOrder`);
+                const scoredRef = database.ref(`${seasonBasePath}/scoredEpisodes`);
+                const currEpRef = database.ref('currentEpisode');
 
                 scoresRef.on('value', (snap) => setScores(snap.val() || {}));
                 elimRef.on('value', (snap) => setEliminationOrder(snap.val() || {}));
+                scoredRef.on('value', (snap) => setScoredEpisodes(snap.val() || {}));
+                currEpRef.on('value', (snap) => setCurrentEpisode(snap.val() || 1));
 
                 return () => {
                     scoresRef.off();
                     elimRef.off();
+                    scoredRef.off();
+                    currEpRef.off();
                 };
             }, [activeLeagueId, activeSeasonId]);
 
@@ -465,13 +505,388 @@
                 document.body.classList.toggle('theme-tribal', theme === 'tribal');
             }, [theme]);
             
-            // Load season preset data
+            const ensureArray = (val) => {
+                if (!val) return [];
+                if (Array.isArray(val)) return val;
+                if (typeof val === 'object') return Object.values(val);
+                return [];
+            };
+
+            // Load season preset data & subscribe to real-time season updates across all leagues
             useEffect(() => {
+                let seasonRef;
+                const savedLocal = localStorage.getItem(`survivor-seasonData-${activeSeasonId}`);
+                const localData = savedLocal ? JSON.parse(savedLocal) : null;
+
                 fetch('seasons/' + activeSeasonId + '.json?t=' + Date.now())
                     .then(res => res.json())
-                    .then(data => setSeasonData(data))
+                    .then(presetData => {
+                        const initialContestants = (localData?.contestants && ensureArray(localData.contestants).length > 0)
+                            ? ensureArray(localData.contestants)
+                            : ensureArray(presetData.contestants);
+                        const initialCustom = (localData?.customTribes && ensureArray(localData.customTribes).length > 0)
+                            ? ensureArray(localData.customTribes)
+                            : ensureArray(presetData.customTribes);
+
+                        setSeasonData(prev => {
+                            if (prev) return prev;
+                            return {
+                                ...presetData,
+                                ...localData,
+                                contestants: initialContestants,
+                                customTribes: initialCustom
+                            };
+                        });
+
+                        if (window.firebaseInitialized) {
+                            seasonRef = database.ref(`seasons/${activeSeasonId}`);
+                            seasonRef.on('value', (snap) => {
+                                if (snap.exists()) {
+                                    const fbSeason = snap.val() || {};
+                                    const fbContestants = fbSeason.contestants ? ensureArray(fbSeason.contestants) : null;
+                                    const fbCustom = fbSeason.customTribes ? ensureArray(fbSeason.customTribes) : null;
+
+                                    setSeasonData(prev => {
+                                        const activeContestants = (fbContestants && fbContestants.length > 0)
+                                            ? fbContestants
+                                            : ((localData?.contestants && ensureArray(localData.contestants).length > 0)
+                                                ? ensureArray(localData.contestants)
+                                                : (prev?.contestants && prev.contestants.length > 0 ? prev.contestants : ensureArray(presetData.contestants)));
+
+                                        const activeCustom = (fbCustom && fbCustom.length > 0)
+                                            ? fbCustom
+                                            : ((localData?.customTribes && ensureArray(localData.customTribes).length > 0)
+                                                ? ensureArray(localData.customTribes)
+                                                : (prev?.customTribes && prev.customTribes.length > 0 ? prev.customTribes : ensureArray(presetData.customTribes)));
+
+                                        const mergedData = {
+                                            ...presetData,
+                                            ...fbSeason,
+                                            contestants: activeContestants,
+                                            customTribes: activeCustom
+                                        };
+                                        localStorage.setItem(`survivor-seasonData-${activeSeasonId}`, JSON.stringify(mergedData));
+                                        return mergedData;
+                                    });
+                                }
+                            });
+                        }
+                    })
                     .catch(err => console.warn('Could not load season json, using fallback.', err));
+
+                return () => {
+                    if (seasonRef) seasonRef.off();
+                };
             }, [activeSeasonId]);
+
+            const saveSeasonDataToFirebase = async (newContestants, newCustomTribes) => {
+                const updatedContestants = newContestants !== undefined ? ensureArray(newContestants) : ensureArray(seasonData?.contestants);
+                const updatedCustomTribes = newCustomTribes !== undefined ? ensureArray(newCustomTribes) : ensureArray(seasonData?.customTribes);
+
+                const updatedSeasonData = {
+                    ...(seasonData || {}),
+                    contestants: updatedContestants,
+                    customTribes: updatedCustomTribes
+                };
+
+                setSeasonData(updatedSeasonData);
+
+                if (window.firebaseInitialized) {
+                    await database.ref(`seasons/${activeSeasonId}`).update({
+                        contestants: updatedContestants,
+                        customTribes: updatedCustomTribes
+                    });
+                }
+                localStorage.setItem(`survivor-seasonData-${activeSeasonId}`, JSON.stringify(updatedSeasonData));
+            };
+
+            const getPriorTribe = (player, epNum) => {
+                if (!player) return 'Unassigned';
+                const ep = parseInt(epNum) || 1;
+                if (ep <= 1) {
+                    return player.startingTribe || player.tribe || 'Unassigned';
+                }
+                return typeof getTribeForEpisode === 'function' ? getTribeForEpisode(player, ep - 1) : (player.tribe || player.startingTribe || 'Unassigned');
+            };
+
+            const handleOpenSingleTribeEdit = (player) => {
+                setEditingPlayer(player);
+                const defEp = getSmartDefaultEpisode(scoredEpisodes, currentEpisode);
+                setSingleEditEpisode(defEp);
+                const currentTribeForEp = getTribeForEpisode(player, defEp) || player.tribe || player.startingTribe || '';
+                setSingleEditTribe(currentTribeForEp);
+            };
+
+            const handleSaveSingleTribeEdit = () => {
+                if (!editingPlayer || !singleEditTribe) return;
+
+                const epNum = parseInt(singleEditEpisode) || 1;
+                const priorTribe = getPriorTribe(editingPlayer, epNum);
+                if (singleEditTribe.trim().toLowerCase() === priorTribe.trim().toLowerCase()) {
+                    return; // Do not allow saving swap to the same tribe
+                }
+
+                const rawContestants = seasonData?.contestants;
+                const contestantList = (rawContestants && ensureArray(rawContestants).length > 0)
+                    ? ensureArray(rawContestants)
+                    : ensureArray(defaultSeason51Players);
+
+                const pIdx = contestantList.findIndex(p => String(p.id) === String(editingPlayer.id));
+                if (pIdx === -1) {
+                    console.warn('Could not find player in contestant list:', editingPlayer);
+                    return;
+                }
+
+                const playerObj = { ...contestantList[pIdx] };
+                const history = playerObj.tribeHistory ? [...playerObj.tribeHistory] : [
+                    { episode: 1, tribe: playerObj.startingTribe || playerObj.tribe || 'Unassigned', type: 'starting', label: `Starting Tribe: ${playerObj.startingTribe || playerObj.tribe}` }
+                ];
+
+                const isMerge = singleEditTribe.toLowerCase().includes('merge');
+                const eventType = isMerge ? 'Merged' : (epNum === 1 ? 'starting' : 'Tribe Swap');
+                const eventLabel = isMerge ? `Merged into ${singleEditTribe}` : (epNum === 1 ? `Starting Tribe: ${singleEditTribe}` : `Tribe Swap to ${singleEditTribe}`);
+
+                const existingIdx = history.findIndex(h => parseInt(h.episode) === epNum);
+                if (existingIdx !== -1) {
+                    history[existingIdx] = { episode: epNum, tribe: singleEditTribe, type: eventType, label: eventLabel };
+                } else {
+                    history.push({ episode: epNum, tribe: singleEditTribe, type: eventType, label: eventLabel });
+                }
+
+                history.sort((a, b) => (parseInt(a.episode) || 1) - (parseInt(b.episode) || 1));
+                playerObj.tribeHistory = history;
+
+                if (epNum === 1) {
+                    playerObj.startingTribe = singleEditTribe;
+                }
+                playerObj.tribe = getTribeForEpisode(playerObj, 99) || singleEditTribe;
+
+                contestantList[pIdx] = playerObj;
+                saveSeasonDataToFirebase(contestantList);
+                setEditingPlayer(null);
+            };
+
+            const handleRemoveTribeEvent = (targetPlayer, episodeToRemove, eventIndexInProgression) => {
+                if (!targetPlayer) return;
+                const rawContestants = seasonData?.contestants;
+                const contestantList = (rawContestants && ensureArray(rawContestants).length > 0)
+                    ? ensureArray(rawContestants)
+                    : ensureArray(defaultSeason51Players);
+
+                const pIdx = contestantList.findIndex(p => String(p.id) === String(targetPlayer.id));
+                if (pIdx === -1) return;
+
+                const playerObj = { ...contestantList[pIdx] };
+                let history = playerObj.tribeHistory ? [...playerObj.tribeHistory] : [
+                    { episode: 1, tribe: playerObj.startingTribe || playerObj.tribe || 'Unassigned', type: 'starting', label: `Starting Tribe: ${playerObj.startingTribe || playerObj.tribe}` }
+                ];
+
+                if (eventIndexInProgression !== undefined && eventIndexInProgression >= 0 && eventIndexInProgression < history.length) {
+                    history.splice(eventIndexInProgression, 1);
+                } else {
+                    history = history.filter(h => parseInt(h.episode) !== parseInt(episodeToRemove));
+                }
+
+                history.sort((a, b) => (parseInt(a.episode) || 1) - (parseInt(b.episode) || 1));
+                playerObj.tribeHistory = history;
+
+                if (history.length > 0) {
+                    const firstEp = history[0];
+                    if (firstEp && firstEp.tribe) {
+                        playerObj.startingTribe = firstEp.tribe;
+                    }
+                    const lastEp = history[history.length - 1];
+                    playerObj.tribe = lastEp ? lastEp.tribe : (playerObj.startingTribe || 'Unassigned');
+                } else {
+                    playerObj.startingTribe = 'Unassigned';
+                    playerObj.tribe = 'Unassigned';
+                    playerObj.tribeHistory = [{ episode: 1, tribe: 'Unassigned', type: 'starting', label: 'Starting Tribe: Unassigned' }];
+                }
+
+                contestantList[pIdx] = playerObj;
+                saveSeasonDataToFirebase(contestantList);
+            };
+
+            const handleSaveCustomTribe = () => {
+                if (!customTribeName || !customTribeName.trim()) return;
+                const cleanName = customTribeName.trim();
+                const existingCustom = (seasonData && seasonData.customTribes) ? [...seasonData.customTribes] : [];
+                
+                if (existingCustom.some(ct => ct.name.toLowerCase() === cleanName.toLowerCase())) {
+                    alert('A tribe with this name already exists!');
+                    return;
+                }
+
+                const palette = PRIMARY_COLOR_PALETTES[customTribeColor] || PRIMARY_COLOR_PALETTES.green;
+                const newTribeObj = {
+                    id: `tribe-${Date.now()}`,
+                    name: cleanName,
+                    color: customTribeColor,
+                    icon: customTribeEmoji || palette.emoji,
+                    badgeBg: palette.badgeBg,
+                    badgeText: palette.badgeText,
+                    badgeBorder: palette.badgeBorder,
+                    gradient: palette.gradient
+                };
+
+                const updatedCustom = [...existingCustom, newTribeObj];
+                saveSeasonDataToFirebase(undefined, updatedCustom);
+                if (editingPlayer) {
+                    setSingleEditTribe(cleanName);
+                }
+                setShowAddCustomTribeModal(false);
+                setCustomTribeName('');
+            };
+
+            const handleOpenBulkEdit = () => {
+                const defEp = getSmartDefaultEpisode(scoredEpisodes, currentEpisode);
+                setBulkEditEpisode(defEp);
+                
+                const initialMap = {};
+                players.forEach(p => {
+                    const elimEp = eliminationOrder && (eliminationOrder[p.id] || eliminationOrder[String(p.id)]);
+                    if (!elimEp || parseInt(elimEp) >= parseInt(defEp)) {
+                        initialMap[p.id] = getTribeForEpisode(p, defEp);
+                    }
+                });
+                setBulkAssignments(initialMap);
+                setShowBulkEditModal(true);
+            };
+
+            const handleBulkEpisodeChange = (newEp) => {
+                setBulkEditEpisode(newEp);
+                const updatedMap = {};
+                players.forEach(p => {
+                    const elimEp = eliminationOrder && (eliminationOrder[p.id] || eliminationOrder[String(p.id)]);
+                    if (!elimEp || parseInt(elimEp) >= parseInt(newEp)) {
+                        updatedMap[p.id] = getTribeForEpisode(p, newEp);
+                    }
+                });
+                setBulkAssignments(updatedMap);
+            };
+
+            const handleSaveBulkEdit = () => {
+                const rawContestants = seasonData?.contestants;
+                const contestantList = (rawContestants && ensureArray(rawContestants).length > 0)
+                    ? ensureArray(rawContestants)
+                    : ensureArray(defaultSeason51Players);
+                const epNum = parseInt(bulkEditEpisode) || 1;
+
+                const updatedContestants = contestantList.map(p => {
+                    const elimEp = eliminationOrder && (eliminationOrder[p.id] || eliminationOrder[String(p.id)]);
+                    if (elimEp && parseInt(elimEp) < epNum) return p; // Skip players eliminated before target episode
+
+                    const newTribe = bulkAssignments[p.id] || bulkAssignments[String(p.id)];
+                    if (!newTribe) return p;
+
+                    const priorTribe = getPriorTribe(p, epNum);
+                    const isSame = newTribe.trim().toLowerCase() === priorTribe.trim().toLowerCase();
+
+                    let history = p.tribeHistory ? [...p.tribeHistory] : [
+                        { episode: 1, tribe: p.startingTribe || p.tribe || 'Unassigned', type: 'starting', label: `Starting Tribe: ${p.startingTribe || p.tribe}` }
+                    ];
+
+                    if (epNum === 1) {
+                        const existingIdx = history.findIndex(h => parseInt(h.episode) === 1);
+                        const startEntry = { episode: 1, tribe: newTribe, type: 'starting', label: `Starting Tribe: ${newTribe}` };
+                        if (existingIdx !== -1) {
+                            history[existingIdx] = startEntry;
+                        } else {
+                            history.push(startEntry);
+                        }
+                    } else {
+                        const existingIdx = history.findIndex(h => parseInt(h.episode) === epNum);
+                        if (isSame) {
+                            // If selected tribe is identical to priorTribe, remove any existing swap entry for epNum
+                            if (existingIdx !== -1) {
+                                history.splice(existingIdx, 1);
+                            }
+                        } else {
+                            const isMerge = newTribe.toLowerCase().includes('merge');
+                            const eventType = isMerge ? 'Merged' : 'Tribe Swap';
+                            const eventLabel = isMerge ? `Merged into ${newTribe}` : `Tribe Swap to ${newTribe}`;
+                            const swapEntry = { episode: epNum, tribe: newTribe, type: eventType, label: eventLabel };
+
+                            if (existingIdx !== -1) {
+                                history[existingIdx] = swapEntry;
+                            } else {
+                                history.push(swapEntry);
+                            }
+                        }
+                    }
+
+                    history.sort((a, b) => (parseInt(a.episode) || 1) - (parseInt(b.episode) || 1));
+                    const updatedP = { ...p, tribeHistory: history };
+                    if (epNum === 1) updatedP.startingTribe = newTribe;
+                    updatedP.tribe = getTribeForEpisode(updatedP, 99) || newTribe;
+                    return updatedP;
+                });
+
+                saveSeasonDataToFirebase(updatedContestants);
+                setShowBulkEditModal(false);
+            };
+
+            const handleConfirmMergeAll = async () => {
+                const epNum = parseInt(bulkEditEpisode) || 1;
+                const rawContestants = seasonData?.contestants;
+                const contestantList = (rawContestants && ensureArray(rawContestants).length > 0)
+                    ? ensureArray(rawContestants)
+                    : ensureArray(defaultSeason51Players);
+                
+                // Active non-eliminated players as of epNum
+                const activePlayersToMerge = contestantList.filter(p => {
+                    const elimEp = eliminationOrder && (eliminationOrder[p.id] || eliminationOrder[String(p.id)]);
+                    return !elimEp || parseInt(elimEp) >= epNum;
+                });
+
+                const mergeTribeName = 'Merge Tribe';
+
+                const updatedContestants = contestantList.map(p => {
+                    const elimEp = eliminationOrder && (eliminationOrder[p.id] || eliminationOrder[String(p.id)]);
+                    if (elimEp && parseInt(elimEp) < epNum) return p; // Skip eliminated players
+
+                    const history = p.tribeHistory ? [...p.tribeHistory] : [
+                        { episode: 1, tribe: p.startingTribe || p.tribe || 'Unassigned', type: 'starting', label: `Starting Tribe: ${p.startingTribe || p.tribe}` }
+                    ];
+
+                    const existingIdx = history.findIndex(h => parseInt(h.episode) === epNum);
+                    const mergeEntry = { episode: epNum, tribe: mergeTribeName, type: 'Merged', label: `Merged into ${mergeTribeName}` };
+                    if (existingIdx !== -1) {
+                        history[existingIdx] = mergeEntry;
+                    } else {
+                        history.push(mergeEntry);
+                    }
+
+                    history.sort((a, b) => (parseInt(a.episode) || 1) - (parseInt(b.episode) || 1));
+                    const updatedP = { ...p, tribeHistory: history };
+                    updatedP.tribe = getTribeForEpisode(updatedP, 99);
+                    return updatedP;
+                });
+
+                // Award +10 Merge Points ("Makes It to the Merge", id: "made-merge") idempotently across active leagues
+                if (window.firebaseInitialized) {
+                    const promises = [];
+                    const scoreId = `merge-bonus-${epNum}`;
+                    const activeLeagues = Object.keys(LEAGUES_DATA);
+
+                    activePlayersToMerge.forEach(p => {
+                        activeLeagues.forEach(lId => {
+                            const scoreRef = database.ref(`leagues/${lId}/seasons/${activeSeasonId}/scores/${p.id}/${epNum}/${scoreId}`);
+                            promises.push(scoreRef.set({
+                                category: 'Makes It to the Merge',
+                                points: 10,
+                                note: 'Merged Tribe Bonus 🏝️'
+                            }));
+                        });
+                    });
+
+                    await Promise.all(promises);
+                }
+
+                await saveSeasonDataToFirebase(updatedContestants);
+                setShowConfirmMergeModal(false);
+                setShowBulkEditModal(false);
+            };
 
             const isFinishedSeason = (seasonData && seasonData.status === 'finished') || (seasonConfig && seasonConfig.status === 'previous') || activeSeasonId === 'season-50';
 
@@ -627,30 +1042,36 @@
             ];
 
             const defaultSeason51Players = [
-                { id: 1, name: "Aaliyah Puglia", tribe: "Toka", startingTribe: "Toka", age: 24, occupation: "Chef", hometown: "Providence, RI" },
-                { id: 2, name: "Alexis Levine", tribe: "Savu", startingTribe: "Savu", age: 34, occupation: "Criminal Defense Attorney", hometown: "Atlanta, GA" },
-                { id: 3, name: "An “Thien An” Nguyen", tribe: "Toka", startingTribe: "Toka", age: 24, occupation: "Medical Student", hometown: "Fort Worth, TX" },
-                { id: 4, name: "Ana Sani", tribe: "Savu", startingTribe: "Savu", age: 34, occupation: "Voice Actress", hometown: "Toronto, ON" },
-                { id: 5, name: "Angelica “Jelly” Loblack", tribe: "Toka", startingTribe: "Toka", age: 29, occupation: "Sociology Professor", hometown: "Bloomington, IN" },
-                { id: 6, name: "Brady Booker", tribe: "Toka", startingTribe: "Toka", age: 27, occupation: "Professional Wrestler", hometown: "Knoxville, TN" },
-                { id: 7, name: "Carter Krull", tribe: "Savu", startingTribe: "Savu", age: 24, occupation: "Livestock Farmer", hometown: "Sioux Falls, SD" },
-                { id: 8, name: "Cristian Chavez", tribe: "Savu", startingTribe: "Savu", age: 26, occupation: "Head of HR", hometown: "Salt Lake City, UT" },
-                { id: 9, name: "Danny “Kilby” Kilby", tribe: "Toka", startingTribe: "Toka", age: 30, occupation: "Game Designer", hometown: "London, ON" },
-                { id: 10, name: "Devin Way", tribe: "Toka", startingTribe: "Toka", age: 33, occupation: "Actor", hometown: "Los Angeles, CA" },
-                { id: 11, name: "Eric Macksoud", tribe: "Savu", startingTribe: "Savu", age: 34, occupation: "Mental Health Counselor", hometown: "Windsor Locks, CT" },
-                { id: 12, name: "Jenna Doore", tribe: "Toka", startingTribe: "Toka", age: 30, occupation: "Wedding Photographer", hometown: "Toledo, OH" },
-                { id: 13, name: "Kristin Flickinger", tribe: "Savu", startingTribe: "Savu", age: 49, occupation: "Crisis Management", hometown: "Santa Barbara, CA" },
-                { id: 14, name: "Lewis Kelly", tribe: "Exile Island", startingTribe: "Exile Island", age: 28, occupation: "Farmer", hometown: "Puerto Rico / Ireland" },
-                { id: 15, name: "Linnea Capobianco", tribe: "Savu", startingTribe: "Savu", age: 25, occupation: "Entrepreneur", hometown: "Jersey City, NJ" },
-                { id: 16, name: "Maggie Nestor", tribe: "Toka", startingTribe: "Toka", age: 40, occupation: "Farmer", hometown: "Charles Town, WV" },
-                { id: 17, name: "Mike Pinsky", tribe: "Toka", startingTribe: "Toka", age: 32, occupation: "Baseball Executive", hometown: "New York City, NY" },
-                { id: 18, name: "Ori Jean-Charles", tribe: "Savu", startingTribe: "Savu", age: 27, occupation: "Personal Trainer", hometown: "Spring Valley, NY" },
-                { id: 19, name: "Patt Cannaday", tribe: "Toka", startingTribe: "Toka", age: 33, occupation: "Federal Prosecutor", hometown: "Washington, DC" },
-                { id: 20, name: "Rob Antonson", tribe: "Savu", startingTribe: "Savu", age: 40, occupation: "Airline Gate Agent", hometown: "Cumberland, RI" },
-                { id: 21, name: "Sharonda Cox", tribe: "Savu", startingTribe: "Savu", age: 34, occupation: "OBGYN Resident", hometown: "Richmond, KY" }
+                { id: 1, name: "Aaliyah Puglia", tribe: "Toka", startingTribe: "Toka", age: 24, occupation: "Chef", hometown: "Providence, RI", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-87-1024x683.jpeg" },
+                { id: 2, name: "Alexis Levine", tribe: "Savu", startingTribe: "Savu", age: 34, occupation: "Criminal Defense Attorney", hometown: "Atlanta, GA", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-90-1024x683.jpeg" },
+                { id: 3, name: "An “Thien An” Nguyen", tribe: "Toka", startingTribe: "Toka", age: 24, occupation: "Medical Student", hometown: "Fort Worth, TX", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-88-1024x683.jpeg" },
+                { id: 4, name: "Ana Sani", tribe: "Savu", startingTribe: "Savu", age: 34, occupation: "Voice Actress", hometown: "Toronto, ON", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-91-1024x683.jpeg" },
+                { id: 5, name: "Angelica “Jelly” Loblack", tribe: "Toka", startingTribe: "Toka", age: 29, occupation: "Sociology Professor", hometown: "Bloomington, IN", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-98-1024x683.jpeg" },
+                { id: 6, name: "Brady Booker", tribe: "Toka", startingTribe: "Toka", age: 27, occupation: "Professional Wrestler", hometown: "Knoxville, TN", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-94-1024x683.jpeg" },
+                { id: 7, name: "Carter Krull", tribe: "Savu", startingTribe: "Savu", age: 24, occupation: "Livestock Farmer", hometown: "Sioux Falls, SD", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-95-1024x683.jpeg" },
+                { id: 8, name: "Cristian Chavez", tribe: "Savu", startingTribe: "Savu", age: 26, occupation: "Head of HR", hometown: "Salt Lake City, UT", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-97-1024x683.jpeg" },
+                { id: 9, name: "Danny “Kilby” Kilby", tribe: "Toka", startingTribe: "Toka", age: 30, occupation: "Game Designer", hometown: "London, ON", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-106-1024x683.jpeg" },
+                { id: 10, name: "Devin Way", tribe: "Toka", startingTribe: "Toka", age: 33, occupation: "Actor", hometown: "Los Angeles, CA", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-102-1024x683.jpeg" },
+                { id: 11, name: "Eric Macksoud", tribe: "Savu", startingTribe: "Savu", age: 34, occupation: "Mental Health Counselor", hometown: "Windsor Locks, CT", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-103-1024x683.jpeg" },
+                { id: 12, name: "Jenna Doore", tribe: "Toka", startingTribe: "Toka", age: 30, occupation: "Wedding Photographer", hometown: "Toledo, OH", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-89-1024x683.jpeg" },
+                { id: 13, name: "Kristin Flickinger", tribe: "Savu", startingTribe: "Savu", age: 49, occupation: "Crisis Management", hometown: "Santa Barbara, CA", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-100-1024x683.jpeg" },
+                { id: 14, name: "Lewis Kelly", tribe: "Exile Island", startingTribe: "Exile Island", age: 28, occupation: "Farmer", hometown: "Puerto Rico / Ireland", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-104-1024x683.jpeg" },
+                { id: 15, name: "Linnea Capobianco", tribe: "Savu", startingTribe: "Savu", age: 25, occupation: "Entrepreneur", hometown: "Jersey City, NJ", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-93-1024x683.jpeg" },
+                { id: 16, name: "Maggie Nestor", tribe: "Toka", startingTribe: "Toka", age: 40, occupation: "Farmer", hometown: "Charles Town, WV", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-92-1024x683.jpeg" },
+                { id: 17, name: "Mike Pinsky", tribe: "Toka", startingTribe: "Toka", age: 32, occupation: "Baseball Executive", hometown: "New York City, NY", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-96-1024x683.jpeg" },
+                { id: 18, name: "Ori Jean-Charles", tribe: "Savu", startingTribe: "Savu", age: 27, occupation: "Personal Trainer", hometown: "Spring Valley, NY", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-107-1024x683.jpeg" },
+                { id: 19, name: "Patt Cannaday", tribe: "Toka", startingTribe: "Toka", age: 33, occupation: "Federal Prosecutor", hometown: "Washington, DC", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-105-1024x683.jpeg" },
+                { id: 20, name: "Rob Antonson", tribe: "Savu", startingTribe: "Savu", age: 40, occupation: "Airline Gate Agent", hometown: "Cumberland, RI", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-101-1024x683.jpeg" },
+                { id: 21, name: "Sharonda Cox", tribe: "Savu", startingTribe: "Savu", age: 34, occupation: "OBGYN Resident", hometown: "Richmond, KY", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-99-1024x683.jpeg" }
             ];
 
-            const players = (seasonData && seasonData.contestants) ? seasonData.contestants : (activeSeasonId === 'season-50' ? defaultSeason50Players : defaultSeason51Players);
+            const defaultPlayers = activeSeasonId === 'season-50' ? defaultSeason50Players : defaultSeason51Players;
+            const rawPlayers = (seasonData && seasonData.contestants) ? seasonData.contestants : defaultPlayers;
+            const players = rawPlayers.map(p => {
+                if (p.image) return p;
+                const match = defaultPlayers.find(dp => String(dp.id) === String(p.id) || dp.name === p.name);
+                return match && match.image ? { ...p, image: match.image } : p;
+            });
             
             const calculatePreviousSeasonOrder = () => {
                 const season50Scores = {
@@ -836,36 +1257,53 @@
             };
             
             const getTribeIcon = (t) => {
-                if (t === 'Cila') return '🔥 ';
-                if (t === 'Kalo') return '🌊 ';
-                if (t === 'Vatu') return '⚡ ';
-                if (t === 'Toka') return '☀️ ';
-                if (t === 'Savu') return '🟣 ';
-                if (t === 'Exile Island') return '🏝️ ';
-                return '🏕️ ';
+                const dotColor = typeof window.getTribeDotColor === 'function' 
+                    ? window.getTribeDotColor(t, customTribesList) 
+                    : (t === 'Cila' ? 'bg-red-500 border border-red-300' :
+                       t === 'Kalo' ? 'bg-blue-500 border border-blue-300' :
+                       t === 'Vatu' ? 'bg-purple-600 border border-purple-300' :
+                       t === 'Toka' ? 'bg-amber-400 border border-amber-200' :
+                       t === 'Savu' ? 'bg-purple-500 border border-purple-300' :
+                       t === 'Exile Island' ? 'bg-slate-800 border border-slate-600' :
+                       t === 'Unassigned' ? 'bg-slate-400 border border-slate-300' : 'bg-amber-400 border border-amber-200');
+                return h('span', { className: `w-2.5 h-2.5 rounded-full inline-block shrink-0 shadow-xs ${dotColor}` });
             };
+
+            const customTribesList = (seasonData && seasonData.customTribes) ? seasonData.customTribes : [];
 
             const availableTribes = useMemo(() => {
                 const tribes = [];
                 players.forEach(p => {
-                    if (p.tribe && p.tribe !== 'Unassigned' && !tribes.includes(p.tribe)) {
-                        tribes.push(p.tribe);
+                    const t = p.tribe || p.startingTribe;
+                    if (t && t !== 'Unassigned' && !tribes.includes(t)) {
+                        tribes.push(t);
                     }
                 });
+                customTribesList.forEach(ct => {
+                    if (ct && ct.name && !tribes.includes(ct.name)) {
+                        tribes.push(ct.name);
+                    }
+                });
+                if (!tribes.includes('Merge Tribe') && !tribes.includes('Merge')) {
+                    tribes.push('Merge Tribe');
+                }
+                if (!tribes.includes('Unassigned')) {
+                    tribes.push('Unassigned');
+                }
                 return tribes;
-            }, [players]);
+            }, [players, customTribesList]);
 
             const filteredPlayers = useMemo(() => {
                 return players.filter(player => {
                     const matchesSearch = player.name.toLowerCase().includes(searchTerm.toLowerCase());
                     const matchesEra = filterEra === 'all' || player.era === filterEra;
-                    const matchesTribe = filterTribe === 'all' || player.tribe === filterTribe;
+                    const matchesTribe = filterTribe === 'all' || (player.tribe || player.startingTribe) === filterTribe;
                     const matchesTeam = filterTeam === 'all' || 
                         (filterTeam === 'unassigned' && !playerTeams[player.id]) ||
                         (filterTeam !== 'unassigned' && playerTeams[player.id] === filterTeam);
                     return matchesSearch && matchesEra && matchesTribe && matchesTeam;
                 });
-            }, [searchTerm, filterEra, filterTribe, filterTeam, playerTeams]);
+            }, [players, searchTerm, filterEra, filterTribe, filterTeam, playerTeams]);
             
             const stats = useMemo(() => {
                 const assigned = Object.keys(playerTeams).length;
@@ -874,7 +1312,7 @@
                     assigned,
                     unassigned: players.length - assigned
                 };
-            }, [playerTeams]);
+            }, [players, playerTeams]);
             
             const getTeamRoster = (teamId) => {
                 return players.filter(p => playerTeams[p.id] === teamId);
@@ -887,7 +1325,10 @@
                 if (tribe === 'Toka') return 'bg-amber-950/80 text-amber-200 border border-amber-500/60 shadow-sm';
                 if (tribe === 'Savu') return 'bg-purple-950/80 text-purple-200 border border-purple-500/60 shadow-sm';
                 if (tribe === 'Exile Island') return 'bg-slate-900/80 text-slate-200 border border-slate-500/60 shadow-sm';
-                return 'bg-slate-800 text-slate-200 border border-slate-600';
+                if (tribe === 'Unassigned') return 'bg-slate-800/80 text-slate-300 border border-slate-600/60 shadow-sm';
+
+                const customStyle = getTribeStyle(tribe, customTribesList);
+                return `${customStyle.badgeBg} ${customStyle.badgeText} border ${customStyle.badgeBorder} shadow-sm`;
             };
             
             const getTribeColor = (tribe) => {
@@ -897,36 +1338,52 @@
                 if (tribe === 'Toka') return 'from-amber-500 to-yellow-600';
                 if (tribe === 'Savu') return 'from-purple-600 to-indigo-700';
                 if (tribe === 'Exile Island') return 'from-slate-700 to-stone-800';
-                return 'from-amber-600 to-orange-700';
+
+                const customStyle = getTribeStyle(tribe, customTribesList);
+                return customStyle.gradient || 'from-amber-600 to-orange-700';
             };
             
-            const PlayerCard = React.memo(({ player, assignedTeam, isBackfilled, canAssign, draftStateStatus, activeSeasonId, scores, eliminationOrder, onRemove, onDraft }) => {
+            const DEFAULT_AVATAR = "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-87-1024x683.jpeg";
+            
+            const PlayerCard = React.memo(({ player, assignedTeam, isBackfilled, canAssign, draftStateStatus, activeSeasonId, scores, eliminationOrder, onRemove, onDraft, onEditTribe, onRemoveTribeEvent }) => {
                 const tribeName = player.tribe || player.startingTribe;
                 const progression = getPlayerTribeProgression(player);
                 const timeline = getPlayerEventsTimeline(player, scores, eliminationOrder);
                 const [showTimeline, setShowTimeline] = useState(false);
 
+                const elimEp = eliminationOrder && (eliminationOrder[player.id] || eliminationOrder[String(player.id)]);
+                const isEliminated = elimEp !== undefined && elimEp !== null && elimEp !== false;
+
                 const totalEventCount = timeline.reduce((acc, ep) => acc + ep.events.length, 0);
 
                 return h('div', { 
-                    className: 'bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 border-2 border-gray-100 flex flex-col justify-between'
+                    className: `bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 border-2 ${isEliminated ? 'border-red-400/80 opacity-60 grayscale-[20%]' : 'border-gray-100'} flex flex-col justify-between relative`
                 },
                     h('div', {},
                         h('div', { className: `p-4 bg-gradient-to-r ${getTribeColor(tribeName)} text-white relative` },
-                            h('img', {
-                                src: player.image,
-                                alt: player.name,
-                                decoding: 'async',
-                                className: 'absolute top-2 right-2 w-20 h-20 rounded-full border-3 border-white shadow-lg object-cover player-photo-avatar'
-                            }),
+                            h('div', { className: 'absolute top-2 right-2 flex flex-col items-center z-10' },
+                                h('img', {
+                                    src: player.image || DEFAULT_AVATAR,
+                                    alt: player.name,
+                                    decoding: 'async',
+                                    onError: (e) => { e.target.src = DEFAULT_AVATAR; },
+                                    className: `w-20 h-20 rounded-full border-3 ${isEliminated ? 'border-red-500 shadow-red-500/50' : 'border-white'} shadow-lg object-cover player-photo-avatar`
+                                }),
+                                isEliminated && h('span', { className: 'mt-1 bg-red-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter shadow-md border border-white whitespace-nowrap' }, `OUT EP ${elimEp}`)
+                            ),
                             h('div', { className: 'flex justify-between items-start mb-2 flex-wrap gap-1' },
-                                assignedTeam ? 
-                                    h('div', { className: `px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 bg-gradient-to-r ${assignedTeam.color} text-white shadow-lg` },
-                                        h(Icons.Check, { size: 12 }),
-                                        ` ${assignedTeam.name}`,
-                                        isBackfilled && h('span', { className: 'ml-1 bg-amber-400 text-amber-950 px-1.5 py-0.5 rounded text-[10px] font-black' }, '↩️ BACKFILLED')
-                                    ) :
-                                    h('div', { className: 'bg-yellow-500 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold' }, 'UNASSIGNED')
+                                h('div', { className: 'flex items-center gap-1.5 flex-wrap' },
+                                    assignedTeam ? 
+                                        h('div', { className: `px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 bg-gradient-to-r ${assignedTeam.color} text-white shadow-lg` },
+                                            h(Icons.Check, { size: 12 }),
+                                            ` ${assignedTeam.name}`,
+                                            isBackfilled && h('span', { className: 'ml-1 bg-amber-400 text-amber-950 px-1.5 py-0.5 rounded text-[10px] font-black' }, '↩️ BACKFILLED')
+                                        ) :
+                                        h('div', { className: 'bg-yellow-500 text-yellow-900 px-3 py-1 rounded-full text-xs font-bold' }, 'UNASSIGNED'),
+                                    isEliminated && h('div', { className: 'px-2.5 py-1 rounded-full text-xs font-black bg-red-600 text-white shadow-md flex items-center gap-1 border border-red-300/50' },
+                                        `💀 VOTED OUT (EP ${elimEp})`
+                                    )
+                                )
                             ),
                             h('div', { className: 'text-white pr-24' },
                                 h('h3', { className: 'text-2xl font-black mb-1', style: { fontFamily: '"Bebas Neue", cursive' }}, player.name),
@@ -934,15 +1391,26 @@
                                     activeSeasonId === 'season-50' && player.era && h('div', { className: 'text-xs font-semibold bg-white/20 backdrop-blur-sm px-2.5 py-0.5 rounded-full' }, player.era),
                                     progression.map((item, idx) => {
                                         const tName = item.tribe;
+                                        const epNum = item.episode || (idx === 0 ? 1 : 2);
                                         return h('span', { key: idx, className: 'inline-flex items-center gap-1' },
                                             idx > 0 && h('span', { className: 'text-xs text-white/80 font-black' }, '➔'),
-                                            h('div', { className: `text-xs font-bold px-2.5 py-0.5 rounded-full ${getTribeBadgeColor(tName)} backdrop-blur-sm shadow-sm flex items-center gap-1` },
+                                            h('div', { className: `text-xs font-bold px-2.5 py-0.5 rounded-full ${getTribeBadgeColor(tName)} backdrop-blur-sm shadow-sm flex items-center gap-1 group relative` },
+                                                h('span', { className: 'text-[10px] text-white/90 font-extrabold border-r border-white/30 pr-1 mr-0.5' }, `Ep ${epNum}`),
                                                 getTribeIcon(tName),
                                                 tName,
                                                 item.type === 'merge' && h('span', { className: 'text-[9px] bg-emerald-700 text-emerald-100 font-extrabold px-1 rounded ml-0.5' }, 'MERGE')
                                             )
                                         );
-                                    })
+                                    }),
+                                    onEditTribe && h('button', {
+                                        type: 'button',
+                                        onClick: (e) => {
+                                            e.stopPropagation();
+                                            onEditTribe(player);
+                                        },
+                                        className: 'px-2 py-0.5 bg-black/40 hover:bg-black/60 backdrop-blur-md text-amber-300 hover:text-amber-200 border border-amber-400/40 rounded-full text-[11px] font-extrabold shadow-sm transition flex items-center gap-1 cursor-pointer ml-0.5',
+                                        title: 'Edit Tribe Assignment'
+                                    }, '✏️ Edit Tribe')
                                 )
                             )
                         ),
@@ -983,13 +1451,24 @@
                                                 ),
                                                 h('div', { className: 'space-y-1' },
                                                     epGroup.events.map(ev => 
-                                                        h('div', { key: ev.id, className: 'flex justify-between items-start gap-1.5 text-[11px]' },
+                                                        h('div', { key: ev.id, className: 'flex justify-between items-center gap-1.5 text-[11px]' },
                                                             h('div', { className: 'flex items-center gap-1.5 text-slate-700 font-medium' },
-                                                                h('span', { className: 'text-xs' }, ev.icon),
+                                                                ev.type === 'tribe' ? getTribeIcon(ev.tribe) : h('span', { className: 'text-xs' }, ev.icon),
                                                                 h('span', {}, ev.title),
                                                                 ev.note && h('span', { className: 'text-slate-400 italic text-[10px]' }, `(${ev.note})`)
                                                             ),
-                                                            ev.points !== undefined && h('span', { className: `font-bold text-[11px] ${ev.points < 0 ? 'text-red-600' : 'text-emerald-700'}` }, `${ev.points > 0 ? '+' : ''}${ev.points}`)
+                                                            h('div', { className: 'flex items-center gap-1.5' },
+                                                                ev.points !== undefined && h('span', { className: `font-bold text-[11px] ${ev.points < 0 ? 'text-red-600' : 'text-emerald-700'}` }, `${ev.points > 0 ? '+' : ''}${ev.points}`),
+                                                                ev.type === 'tribe' && onRemoveTribeEvent && h('button', {
+                                                                    type: 'button',
+                                                                    onClick: (e) => {
+                                                                        e.stopPropagation();
+                                                                        onRemoveTribeEvent(player, epGroup.episode);
+                                                                    },
+                                                                    className: 'ml-2 text-red-500 hover:text-red-700 font-bold text-sm cursor-pointer transition-colors leading-none',
+                                                                    title: `Delete tribe event for Episode ${epGroup.episode}`
+                                                                }, '×')
+                                                            )
                                                         )
                                                     )
                                                 )
@@ -999,7 +1478,7 @@
                             )
                         )
                     ),
-                    h('div', { className: 'p-4 pt-0' },
+                    (assignedTeam || canAssign) && h('div', { className: 'p-4 pt-0' },
                         h('div', { className: 'flex gap-2 mt-2' },
                             assignedTeam ?
                                 (draftStateStatus !== 'finalized' && h('button', {
@@ -1147,6 +1626,14 @@
                         },
                             h(Icons.Settings, { size: 18 }),
                             h('span', {}, 'Draft Settings')
+                        ),
+                        h('button', {
+                            onClick: handleOpenBulkEdit,
+                            className: 'px-4 py-2.5 bg-gradient-to-r from-amber-600 to-orange-700 hover:from-amber-500 hover:to-orange-600 text-white font-bold rounded-xl shadow-lg transition flex items-center gap-2 cursor-pointer text-sm border border-amber-400/30',
+                            title: 'Visual Drag & Drop Bulk Tribe Management'
+                        },
+                            h('span', { className: 'text-base' }, '🏕️'),
+                            h('span', {}, 'Edit Tribes')
                         )
                     ),
 
@@ -1246,7 +1733,7 @@
                                     },
                                         h('option', { value: 'all', className: 'bg-white text-gray-900' }, 'All Tribes'),
                                         ...availableTribes.map(t =>
-                                            h('option', { key: t, value: t, className: 'bg-white text-gray-900' }, `${getTribeIcon(t)}${t}`)
+                                            h('option', { key: t, value: t, className: 'bg-white text-gray-900' }, t)
                                         )
                                     ),
                                     h('select', {
@@ -1276,7 +1763,9 @@
                                         scores,
                                         eliminationOrder,
                                         onRemove: removePlayer,
-                                        onDraft: openTeamModal
+                                        onDraft: openTeamModal,
+                                        onEditTribe: handleOpenSingleTribeEdit,
+                                        onRemoveTribeEvent: handleRemoveTribeEvent
                                     });
                                 })
                             )
@@ -1697,6 +2186,333 @@
                     h('div', { className: 'mt-12 text-center text-gray-900' },
                         h('p', { className: 'text-lg font-semibold mb-2' }, '📺 Survivor 51: Open Era'),
                         h('p', { className: 'text-sm text-gray-700' }, 'Official 21 Castaways • Multi-League Draft Tracker')
+                    ),
+
+                    // 1. Single Player Edit Tribe Modal
+                    editingPlayer && h('div', { className: 'fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4' },
+                        h('div', { className: 'bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border-2 border-orange-500/40 relative' },
+                            h('button', {
+                                onClick: () => setEditingPlayer(null),
+                                className: 'absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold'
+                            }, '✕'),
+
+                            h('div', { className: 'flex items-center gap-3 mb-4 pb-3 border-b border-gray-100' },
+                                h('img', { src: editingPlayer.image, className: 'w-14 h-14 rounded-full object-cover border-2 border-orange-500 shadow-md' }),
+                                h('div', {},
+                                    h('h3', { className: 'text-2xl font-black text-gray-900', style: { fontFamily: '"Bebas Neue", cursive' } }, editingPlayer.name),
+                                    h('div', { className: 'text-xs text-gray-500 font-semibold' }, `Current Tribe: ${editingPlayer.tribe || editingPlayer.startingTribe || 'Unassigned'}`)
+                                )
+                            ),
+
+                            h('div', { className: 'bg-amber-50 text-amber-900 border border-amber-300 p-3 rounded-xl text-xs font-semibold mb-4 flex items-center gap-2' },
+                                h('span', { className: 'text-base' }, '🌐'),
+                                h('span', {}, 'Season-Wide: Tribe changes apply globally across all leagues playing this season.')
+                            ),
+
+                            h('div', { className: 'space-y-4 mb-6' },
+                                h('div', {},
+                                    h('label', { className: 'block text-xs font-bold text-gray-700 uppercase mb-1' }, 'Effective Episode'),
+                                    h('select', {
+                                        value: singleEditEpisode,
+                                        onChange: (e) => {
+                                            const newEp = parseInt(e.target.value);
+                                            setSingleEditEpisode(newEp);
+                                            if (editingPlayer) {
+                                                const tr = getTribeForEpisode(editingPlayer, newEp) || editingPlayer.tribe || editingPlayer.startingTribe || '';
+                                                setSingleEditTribe(tr);
+                                            }
+                                        },
+                                        className: 'w-full px-4 py-2.5 bg-gray-50 border-2 border-gray-300 rounded-xl font-bold text-sm focus:border-orange-500 focus:outline-none'
+                                    },
+                                        Array.from({ length: 14 }, (_, i) => i + 1).map(ep => 
+                                            h('option', { key: ep, value: ep }, `Episode ${ep}`)
+                                        )
+                                    )
+                                ),
+
+                                h('div', {},
+                                    h('div', { className: 'flex justify-between items-center mb-1' },
+                                        h('label', { className: 'block text-xs font-bold text-gray-700 uppercase' }, 'Select Tribe'),
+                                        singleEditTribe && singleEditTribe !== 'ADD_NEW_TRIBE' && h('div', { className: `px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1.5 ${getTribeBadgeColor(singleEditTribe)} shadow-xs` },
+                                            getTribeIcon(singleEditTribe),
+                                            h('span', {}, singleEditTribe)
+                                        )
+                                    ),
+                                    h('select', {
+                                        value: singleEditTribe,
+                                        onChange: (e) => {
+                                            const val = e.target.value;
+                                            if (val === 'ADD_NEW_TRIBE') {
+                                                setShowAddCustomTribeModal(true);
+                                            } else {
+                                                setSingleEditTribe(val);
+                                            }
+                                        },
+                                        className: 'w-full px-4 py-2.5 bg-gray-50 border-2 border-gray-300 rounded-xl font-bold text-sm focus:border-orange-500 focus:outline-none'
+                                    },
+                                        availableTribes.map(t =>
+                                            h('option', { key: t, value: t }, t)
+                                        ),
+                                        h('option', { value: 'ADD_NEW_TRIBE', className: 'font-bold text-orange-600' }, '➕ Add New Custom Tribe...')
+                                    )
+                                ),
+
+                                (() => {
+                                    const epNum = parseInt(singleEditEpisode) || 1;
+                                    const priorTribe = getPriorTribe(editingPlayer, epNum);
+                                    const isSameTribe = singleEditTribe && priorTribe && (singleEditTribe.trim().toLowerCase() === priorTribe.trim().toLowerCase());
+                                    return isSameTribe ? h('div', { className: 'p-3 bg-amber-50 text-amber-900 border border-amber-300 rounded-xl text-xs font-bold flex items-center gap-2' },
+                                        h('span', { className: 'text-sm' }, '⚠️'),
+                                        h('span', {}, `Contestant is already on the ${priorTribe} tribe for Episode ${epNum}. Select a different tribe to save.`)
+                                    ) : (
+                                        epNum > 1 && h('div', { className: 'text-[11px] text-gray-500 italic' },
+                                            `Tribe assignment for episodes prior to Episode ${epNum} will remain unchanged.`
+                                        )
+                                    );
+                                })()
+                            ),
+
+                            h('div', { className: 'flex gap-2' },
+                                h('button', {
+                                    onClick: () => setEditingPlayer(null),
+                                    className: 'w-1/2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold rounded-xl text-sm transition border border-slate-600/80 shadow-sm cursor-pointer'
+                                }, 'Cancel'),
+                                (() => {
+                                    const epNum = parseInt(singleEditEpisode) || 1;
+                                    const priorTribe = getPriorTribe(editingPlayer, epNum);
+                                    const isSameTribe = singleEditTribe && priorTribe && (singleEditTribe.trim().toLowerCase() === priorTribe.trim().toLowerCase());
+                                    return h('button', {
+                                        onClick: handleSaveSingleTribeEdit,
+                                        disabled: isSameTribe,
+                                        className: `w-1/2 px-4 py-2.5 font-bold rounded-xl text-sm shadow-md transition ${
+                                            isSameTribe 
+                                                ? 'bg-gray-300 text-gray-400 cursor-not-allowed border border-gray-300 shadow-none' 
+                                                : 'bg-gradient-to-r from-orange-500 to-amber-600 text-white hover:shadow-lg cursor-pointer'
+                                        }`
+                                    }, 'Save Tribe');
+                                })()
+                            )
+                        )
+                    ),
+
+                    // 2. Add Custom Tribe Sub-Modal
+                    showAddCustomTribeModal && h('div', { className: 'fixed inset-0 bg-black/85 backdrop-blur-sm z-[60] flex items-center justify-center p-4' },
+                        h('div', { className: 'bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border-2 border-emerald-500/40 relative' },
+                            h('h3', { className: 'text-2xl font-black text-gray-900 mb-1', style: { fontFamily: '"Bebas Neue", cursive' } }, '➕ Add New Custom Tribe'),
+                            h('p', { className: 'text-xs text-gray-500 mb-4' }, 'Create a new tribe with custom name and primary color theme.'),
+
+                            h('div', { className: 'space-y-4 mb-6' },
+                                h('div', {},
+                                    h('label', { className: 'block text-xs font-bold text-gray-700 uppercase mb-1' }, 'Tribe Name'),
+                                    h('input', {
+                                        type: 'text',
+                                        placeholder: 'e.g., Vatu, Exile, Manu',
+                                        value: customTribeName,
+                                        onChange: (e) => setCustomTribeName(e.target.value),
+                                        className: 'w-full px-4 py-2.5 bg-gray-50 border-2 border-gray-300 rounded-xl font-bold text-sm focus:border-emerald-500 focus:outline-none'
+                                    })
+                                ),
+
+                                h('div', {},
+                                    h('label', { className: 'block text-xs font-bold text-gray-700 uppercase mb-1' }, 'Primary Color Theme'),
+                                    h('div', { className: 'grid grid-cols-4 gap-2' },
+                                        Object.values(PRIMARY_COLOR_PALETTES).map(pal => 
+                                            h('button', {
+                                                key: pal.id,
+                                                type: 'button',
+                                                onClick: () => {
+                                                    setCustomTribeColor(pal.id);
+                                                    setCustomTribeEmoji('');
+                                                },
+                                                className: `p-2.5 rounded-xl text-center border-2 transition ${pal.cardBg} ${
+                                                    customTribeColor === pal.id ? `${pal.borderColor} ring-2 ring-emerald-500 font-bold scale-105` : 'border-transparent opacity-80'
+                                                }`
+                                            },
+                                                h('div', { className: `w-5 h-5 rounded-full mx-auto shadow-xs ${pal.dotBg}` }),
+                                                h('div', { className: `text-[9px] font-black uppercase mt-1.5 ${pal.badgeText}` }, pal.id)
+                                            )
+                                        )
+                                    )
+                                )
+                            ),
+
+                            h('div', { className: 'flex gap-2' },
+                                h('button', {
+                                    onClick: () => setShowAddCustomTribeModal(false),
+                                    className: 'w-1/2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-100 font-bold rounded-xl text-sm transition border border-slate-600/80 shadow-sm cursor-pointer'
+                                }, 'Cancel'),
+                                h('button', {
+                                    onClick: handleSaveCustomTribe,
+                                    className: 'w-1/2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-md cursor-pointer'
+                                }, 'Save Tribe')
+                            )
+                        )
+                    ),
+
+                    // 3. Visual Drag & Drop Bulk Tribe Edit Modal
+                    showBulkEditModal && h('div', { className: 'fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4 md:p-6 overflow-y-auto' },
+                        h('div', { className: 'bg-slate-900 rounded-3xl max-w-5xl w-full p-6 text-white shadow-2xl border-2 border-orange-500/50 max-h-[90vh] flex flex-col justify-between' },
+                            h('div', {},
+                                // Header Bar
+                                h('div', { className: 'flex justify-between items-center mb-4 pb-3 border-b border-slate-800 flex-wrap gap-2' },
+                                    h('div', { className: 'flex items-center gap-2' },
+                                        h('span', { className: 'text-3xl' }, '🏕️'),
+                                        h('div', {},
+                                            h('h2', { className: 'text-3xl font-black text-amber-400 uppercase tracking-wider', style: { fontFamily: '"Bebas Neue", cursive' } }, 'EDIT TRIBES (VISUAL BULK DASHBOARD)'),
+                                            h('p', { className: 'text-xs text-slate-400 font-semibold' }, 'Drag & Drop players into tribe shape containers. Click "Save Changes" to apply season-wide.')
+                                        )
+                                    ),
+                                    h('div', { className: 'flex items-center gap-2' },
+                                        h('button', {
+                                            onClick: () => setShowAddCustomTribeModal(true),
+                                            className: 'px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold rounded-xl border border-amber-500/40 text-xs flex items-center gap-1 cursor-pointer'
+                                        }, '➕ Add Tribe'),
+                                        h('button', {
+                                            onClick: () => setShowConfirmMergeModal(true),
+                                            className: 'px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-md cursor-pointer'
+                                        }, '🤝 Merge All Players'),
+                                        h('button', {
+                                            onClick: () => setShowBulkEditModal(false),
+                                            className: 'p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition'
+                                        }, '✕')
+                                    )
+                                ),
+
+                                // Target Episode Selector
+                                h('div', { className: 'flex items-center justify-between mb-4 bg-slate-950/80 p-3 rounded-2xl border border-slate-800 flex-wrap gap-2' },
+                                    h('div', { className: 'flex items-center gap-2' },
+                                        h('span', { className: 'text-xs font-bold text-slate-400 uppercase' }, 'Target Episode:'),
+                                        h('select', {
+                                            value: bulkEditEpisode,
+                                            onChange: (e) => handleBulkEpisodeChange(parseInt(e.target.value)),
+                                            className: 'px-3 py-1.5 bg-slate-800 text-amber-300 font-bold rounded-xl border border-amber-500/40 text-xs focus:outline-none cursor-pointer'
+                                        },
+                                            Array.from({ length: 14 }, (_, i) => i + 1).map(ep => 
+                                                h('option', { key: ep, value: ep }, `Episode ${ep}`)
+                                            )
+                                        )
+                                    ),
+                                    h('div', { className: 'text-xs text-amber-400/90 font-semibold' }, `🖐️ Drag player buttons between containers below:`)
+                                ),
+
+                                // Tribe Shape Containers Grid
+                                (() => {
+                                    const activePlayersForEp = players.filter(p => {
+                                        const elimEp = eliminationOrder && (eliminationOrder[p.id] || eliminationOrder[String(p.id)]);
+                                        return !elimEp || parseInt(elimEp) >= parseInt(bulkEditEpisode);
+                                    });
+
+                                    return h('div', { className: 'grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[55vh] overflow-y-auto pr-1' },
+                                        availableTribes.map(tribeName => {
+                                            const style = getTribeStyle(tribeName, customTribesList);
+                                            const assignedPlayerIds = Object.keys(bulkAssignments).filter(id => bulkAssignments[id] === tribeName);
+                                            const assignedPlayersList = activePlayersForEp.filter(p => assignedPlayerIds.includes(String(p.id)) || assignedPlayerIds.includes(p.id));
+
+                                            return h('div', {
+                                                key: tribeName,
+                                                onDragOver: (e) => e.preventDefault(),
+                                                onDrop: (e) => {
+                                                    e.preventDefault();
+                                                    if (draggedPlayerId) {
+                                                        setBulkAssignments(prev => ({ ...prev, [draggedPlayerId]: tribeName }));
+                                                        setDraggedPlayerId(null);
+                                                    }
+                                                },
+                                                className: `rounded-2xl p-4 border-2 ${style.borderColor} ${style.cardBg} transition-all duration-200 flex flex-col justify-between shadow-lg`
+                                            },
+                                            h('div', {},
+                                                // Tribe Shape Header
+                                                h('div', { className: `p-2.5 rounded-xl bg-gradient-to-r ${style.gradient} text-white flex justify-between items-center mb-3 shadow-md` },
+                                                    h('div', { className: 'flex items-center gap-2 font-black text-sm tracking-wider uppercase' },
+                                                        h('span', { className: `w-3 h-3 rounded-full inline-block shrink-0 border border-white/40 shadow-xs ${style.dotBg}` }),
+                                                        h('span', {}, tribeName)
+                                                    ),
+                                                    h('span', { className: 'text-xs font-extrabold bg-white/20 backdrop-blur-sm px-2 py-0.5 rounded-full' }, `${assignedPlayersList.length} player(s)`)
+                                                ),
+
+                                                // Player Name Buttons Box
+                                                h('div', { className: 'flex flex-wrap gap-2 min-h-[80px] p-2 bg-slate-950/40 rounded-xl border border-slate-800/80 items-start' },
+                                                    assignedPlayersList.length === 0 ?
+                                                        h('div', { className: 'w-full text-center text-xs text-slate-500 italic py-4' }, 'Drag players here') :
+                                                        assignedPlayersList.map(p => 
+                                                            h('div', {
+                                                                key: p.id,
+                                                                draggable: true,
+                                                                onDragStart: () => setDraggedPlayerId(p.id),
+                                                                className: 'px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl font-bold text-xs border border-amber-500/40 cursor-grab active:cursor-grabbing shadow-sm flex items-center gap-1.5 transition transform hover:scale-105'
+                                                            },
+                                                                h('img', { src: p.image, className: 'w-5 h-5 rounded-full object-cover border border-white' }),
+                                                                h('span', {}, p.name)
+                                                            )
+                                                        )
+                                                )
+                                            )
+                                        );
+                                    })
+                                )
+                            })()
+                            ),
+
+                            // Modal Footer Controls
+                            h('div', { className: 'flex justify-between items-center pt-4 border-t border-slate-800 mt-4 flex-wrap gap-2' },
+                                h('div', { className: 'text-xs text-slate-400 font-medium' }, 'Changes will be saved to season configuration across all leagues.'),
+                                h('div', { className: 'flex gap-2' },
+                                    h('button', {
+                                        onClick: () => setShowBulkEditModal(false),
+                                        className: 'px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-sm transition'
+                                    }, 'Cancel'),
+                                    h('button', {
+                                        onClick: handleSaveBulkEdit,
+                                        className: 'px-6 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold rounded-xl text-sm shadow-lg hover:shadow-xl transition'
+                                    }, 'Save Changes')
+                                )
+                            )
+                        )
+                    ),
+
+                    // 4. Confirm Merge Modal
+                    showConfirmMergeModal && h('div', { className: 'fixed inset-0 bg-black/90 backdrop-blur-md z-[70] flex items-center justify-center p-4' },
+                        h('div', { className: 'bg-slate-900 rounded-3xl max-w-lg w-full p-6 text-white shadow-2xl border-2 border-purple-500/60 relative' },
+                            h('div', { className: 'flex items-center gap-3 mb-4 pb-3 border-b border-slate-800' },
+                                h('span', { className: 'text-3xl' }, '🤝'),
+                                h('div', {},
+                                    h('h3', { className: 'text-2xl font-black text-amber-400', style: { fontFamily: '"Bebas Neue", cursive' } }, `CONFIRM MERGE (EPISODE ${bulkEditEpisode})`),
+                                    h('p', { className: 'text-xs text-slate-400 font-semibold' }, 'Shift all active players to Merge Tribe & award Merge points.')
+                                )
+                            ),
+
+                            h('div', { className: 'bg-purple-950/80 text-purple-200 border border-purple-500/40 p-3 rounded-xl text-xs font-semibold mb-4 space-y-1' },
+                                h('div', { className: 'font-bold text-amber-300' }, '🏆 Automated Merge Actions:'),
+                                h('div', {}, `• Reassigns all active non-eliminated players to "Merge Tribe" starting Episode ${bulkEditEpisode}.`),
+                                h('div', {}, `• Awards +10 Merge Points ("Makes It to the Merge") idempotently in score logs for all active leagues.`)
+                            ),
+
+                            h('div', { className: 'mb-4' },
+                                h('label', { className: 'block text-xs font-bold text-slate-300 uppercase mb-2' }, 'Contestants Scheduled for Merge:'),
+                                h('div', { className: 'flex flex-wrap gap-2 max-h-40 overflow-y-auto p-2 bg-slate-950/80 rounded-xl border border-slate-800' },
+                                    players.filter(p => {
+                                        const elimEp = eliminationOrder && (eliminationOrder[p.id] || eliminationOrder[String(p.id)]);
+                                        return !elimEp || parseInt(elimEp) >= parseInt(bulkEditEpisode);
+                                    }).map(p =>
+                                        h('div', { key: p.id, className: 'px-2.5 py-1 bg-purple-900/60 border border-purple-400/30 rounded-lg text-xs font-bold text-purple-200 flex items-center gap-1.5' },
+                                            h('img', { src: p.image, className: 'w-4 h-4 rounded-full object-cover' }),
+                                            h('span', {}, p.name)
+                                        )
+                                    )
+                                )
+                            ),
+
+                            h('div', { className: 'flex gap-2' },
+                                h('button', {
+                                    onClick: () => setShowConfirmMergeModal(false),
+                                    className: 'w-1/2 px-4 py-2.5 bg-slate-800 text-slate-300 font-bold rounded-xl text-sm hover:bg-slate-700'
+                                }, 'Cancel'),
+                                h('button', {
+                                    onClick: handleConfirmMergeAll,
+                                    className: 'w-1/2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 text-white font-bold rounded-xl text-sm shadow-lg'
+                                }, 'Execute Merge 🤝')
+                            )
+                        )
                     )
                 )
             );
