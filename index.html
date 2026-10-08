@@ -751,36 +751,26 @@
                 h('div', { className: 'flex justify-between items-center mb-4 flex-wrap gap-3 pb-3 border-b border-amber-900/50' },
                     h('div', {},
                         h('span', { className: 'font-extrabold text-xs text-amber-400 uppercase tracking-wider block' }, '📊 EPISODE & PLAYER EVENT BREAKDOWN'),
-                        h('span', { className: 'text-xs text-amber-200/70 font-medium' }, `Single Episode Focus • Team Total: ${selectedEpTotal >= 0 ? `+${selectedEpTotal}` : selectedEpTotal} pts`)
+                        h('span', { className: 'text-xs text-amber-200/70 font-medium' }, `Team Total: ${selectedEpTotal >= 0 ? `+${selectedEpTotal}` : selectedEpTotal} pts`)
                     ),
 
-                    h('div', { className: 'flex items-center gap-2 flex-wrap' },
-                        h('button', {
+                    h('div', { className: 'flex items-center gap-2' },
+                        selectedEp > 1 && h('button', {
                             onClick: () => setSelectedEp(prev => Math.max(1, prev - 1)),
-                            disabled: selectedEp <= 1,
-                            className: 'px-2.5 py-1 bg-slate-800 border border-amber-900/60 rounded-lg text-xs font-bold text-amber-200 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs'
+                            className: 'px-2.5 py-1 bg-slate-800 border border-amber-900/60 rounded-lg text-xs font-bold text-amber-200 hover:bg-slate-700 cursor-pointer shadow-2xs'
                         }, '◄ Prev Ep'),
 
-                        h('div', { className: 'flex gap-1 overflow-x-auto py-1 max-w-[280px]' },
-                            episodes.map(ep => h('button', {
-                                key: ep,
-                                onClick: () => setSelectedEp(ep),
-                                className: `px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                                    selectedEp === ep ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-xs font-extrabold' : 'bg-slate-800/80 text-amber-200/70 hover:bg-slate-700'
-                                }`
-                            }, `Ep ${ep}`))
-                        ),
+                        h('div', { className: 'px-3.5 py-1 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg text-xs font-black shadow-xs' }, `Episode ${selectedEp}`),
 
-                        h('button', {
+                        selectedEp < maxEp && h('button', {
                             onClick: () => setSelectedEp(prev => Math.min(maxEp, prev + 1)),
-                            disabled: selectedEp >= maxEp,
-                            className: 'px-2.5 py-1 bg-slate-800 border border-amber-900/60 rounded-lg text-xs font-bold text-amber-200 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-2xs'
+                            className: 'px-2.5 py-1 bg-slate-800 border border-amber-900/60 rounded-lg text-xs font-bold text-amber-200 hover:bg-slate-700 cursor-pointer shadow-2xs'
                         }, 'Next Ep ►')
                     )
                 ),
 
-                // Interactive Single Episode Player Bar Chart (Positive & Negative Stacks)
-                h('div', { className: 'flex items-center justify-around gap-4 pt-4 pb-2 min-h-[220px] relative' },
+                // Interactive Single Episode Player Bar Chart (Aligned X-Axis Padding matching TeamScoreGraph)
+                h('div', { className: 'flex items-center justify-around gap-4 pt-4 pb-2 min-h-[220px] relative px-[60px]' },
                     roster.length === 0 ? h('div', { className: 'text-center text-slate-400 italic' }, 'No players on roster') :
                     roster.map(player => {
                         const pData = activeEpMap[player.id] || { totalPts: 0, posPts: 0, negPts: 0, events: [] };
