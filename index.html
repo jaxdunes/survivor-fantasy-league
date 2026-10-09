@@ -1261,6 +1261,7 @@
                             }
 
                             const badgeY = item.score >= 0 ? Math.max(paddingTop - 6, by - 6) : Math.min(paddingTop + plotHeight + 12, by + bh + 12);
+                            const nameY = item.score >= 0 ? zeroY + 14 : by + bh + 24;
                             const isDimmed = hoveredTeamId && hoveredTeamId !== item.teamId;
 
                             return h('g', { key: item.id || i, style: { opacity: isDimmed ? 0.15 : 1, transition: 'opacity 0.2s' } },
@@ -1293,8 +1294,8 @@
                                     onMouseLeave: () => setHoveredPoint(null)
                                 }),
 
-                                // Castaway name below X-axis
-                                h('text', { x: bx + barW/2, y: paddingTop + plotHeight + 16, textAnchor: 'middle', fontSize: 9, fontWeight: '800', fill: '#f8fafc' }, item.name.split(' ')[0])
+                                // Castaway name right below X-axis (or right below negative score bar)
+                                h('text', { x: bx + barW/2, y: nameY, textAnchor: 'middle', fontSize: 9, fontWeight: '800', fill: '#f8fafc' }, item.name.split(' ')[0])
                             );
                         })
                     );
