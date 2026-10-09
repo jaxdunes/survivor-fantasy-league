@@ -753,31 +753,39 @@
 
             return h('div', { className: 'bg-slate-900/90 border border-amber-500/30 rounded-xl p-4 mb-4 relative text-slate-100 backdrop-blur-md shadow-xl' },
                 // Header Controls for Episode Navigation
-                h('div', { className: 'flex justify-between items-center mb-3 flex-wrap gap-3 pb-1' },
+                h('div', { className: 'flex justify-between items-center mb-3 flex-wrap gap-2 pb-1 w-full' },
                     h('div', {},
                         h('span', { className: 'font-extrabold text-xs text-amber-400 uppercase tracking-wider block' }, 'EPISODE & PLAYER EVENT BREAKDOWN'),
                         h('span', { className: 'text-xs text-amber-200/70 font-medium' }, `Team Total: ${selectedEpTotal >= 0 ? `+${selectedEpTotal}` : selectedEpTotal} pts`)
                     ),
 
-                    h('div', { className: 'flex items-center gap-2' },
+                    h('div', { className: 'flex items-center gap-1.5 ml-auto sm:ml-0' },
                         h('button', {
                             onClick: () => setSelectedEp(prev => Math.max(1, prev - 1)),
                             disabled: selectedEp <= 1,
-                            className: `text-lg font-black text-amber-400 hover:text-amber-200 cursor-pointer transition-transform hover:scale-125 select-none w-5 h-5 flex items-center justify-center ${selectedEp <= 1 ? 'opacity-0 pointer-events-none' : 'opacity-80 hover:opacity-100'}`
-                        }, '<'),
+                            className: `p-1 text-amber-400 hover:text-amber-200 cursor-pointer transition-transform hover:scale-125 select-none flex items-center justify-center ${selectedEp <= 1 ? 'opacity-0 pointer-events-none' : 'opacity-80 hover:opacity-100'}`
+                        },
+                            h('svg', { className: 'w-4 h-4 stroke-current fill-none stroke-[2.5]', viewBox: '0 0 24 24' },
+                                h('path', { d: 'M15 18l-6-6 6-6', strokeLinecap: 'round', strokeLinejoin: 'round' })
+                            )
+                        ),
 
                         h('div', { className: 'text-sm font-black text-amber-300 min-w-[85px] text-center uppercase tracking-wider select-none' }, `Episode ${selectedEp}`),
 
                         h('button', {
                             onClick: () => setSelectedEp(prev => Math.min(maxEp, prev + 1)),
                             disabled: selectedEp >= maxEp,
-                            className: `text-lg font-black text-amber-400 hover:text-amber-200 cursor-pointer transition-transform hover:scale-125 select-none w-5 h-5 flex items-center justify-center ${selectedEp >= maxEp ? 'opacity-0 pointer-events-none' : 'opacity-80 hover:opacity-100'}`
-                        }, '>')
+                            className: `p-1 text-amber-400 hover:text-amber-200 cursor-pointer transition-transform hover:scale-125 select-none flex items-center justify-center ${selectedEp >= maxEp ? 'opacity-0 pointer-events-none' : 'opacity-80 hover:opacity-100'}`
+                        },
+                            h('svg', { className: 'w-4 h-4 stroke-current fill-none stroke-[2.5]', viewBox: '0 0 24 24' },
+                                h('path', { d: 'M9 18l6-6-6-6', strokeLinecap: 'round', strokeLinejoin: 'round' })
+                            )
+                        )
                     )
                 ),
 
-                // Fixed Baseline Chart Layout (Height 220px, Zero baseline locked at 130px in space)
-                h('div', { className: 'relative w-full h-[220px] px-[60px] pt-2 pb-6 flex items-center justify-around gap-4' },
+                // Fixed Baseline Chart Layout (Height 235px, Zero baseline locked at 130px in space)
+                h('div', { className: 'relative w-full h-[235px] px-2 sm:px-[60px] pt-2 pb-7 flex items-center justify-around gap-2 sm:gap-4' },
                     roster.length === 0 ? h('div', { className: 'text-center text-slate-400 italic' }, 'No players on roster') :
                     roster.map(player => {
                         const pData = activeEpMap[player.id] || { totalPts: 0, posPts: 0, negPts: 0, events: [] };
@@ -786,7 +794,7 @@
                         const negEvents = pData.events.filter(e => e.pts < 0);
 
                         const posPx = pData.posPts > 0 ? Math.round((pData.posPts / globalMaxPos) * 80) : 0;
-                        const negPx = pData.negPts > 0 ? Math.round((pData.negPts / globalMaxNeg) * 45) : 0;
+                        const negPx = pData.negPts > 0 ? Math.round((pData.negPts / globalMaxNeg) * 36) : 0;
 
                         return h('div', { key: player.id, className: 'flex-1 flex flex-col items-center h-full relative max-w-[90px]' },
                             // Net Pts Label (radiates with bars: above positive bar, below negative bar, or sitting right above baseline if 0 pts)
@@ -834,7 +842,7 @@
                             ),
 
                             // Castaway Name Label fixed in position at bottom
-                            h('span', { className: 'text-xs font-extrabold text-slate-300 absolute bottom-1 text-center truncate max-w-[85px]' }, player.name.split(' ')[0])
+                            h('span', { className: 'text-xs font-extrabold text-slate-300 absolute -bottom-1 text-center truncate max-w-[85px]' }, player.name.split(' ')[0])
                         );
                     })
                 ),
@@ -894,7 +902,7 @@
                             key: item.id,
                             style: { width: `${pct}%`, backgroundColor: item.color },
                             className: 'h-full transition-all hover:brightness-125 cursor-pointer relative group flex items-center justify-center border-r border-slate-900/30',
-                            title: `${item.name}: +${item.score} pts (${Math.round(pct)}% of positive points)`
+                            title: `${item.name}: ${item.score} pts (${Math.round(pct)}% of positive points)`
                         },
                             pct > 12 && h('span', { className: 'text-[10px] font-black text-white drop-shadow-xs truncate px-1' }, `${Math.round(pct)}%`)
                         );
@@ -911,10 +919,10 @@
                             className: 'flex flex-col items-center justify-start text-center px-0.5 overflow-hidden'
                         },
                             h('span', { className: 'text-[11px] font-extrabold text-slate-200 truncate w-full' }, item.name.split(' ')[0]),
-                            h('span', { className: 'text-[10px] font-black text-amber-400 truncate w-full' }, `+${item.score} (${Math.round(pct)}%)`)
+                            h('span', { className: 'text-[10px] font-black text-amber-400 truncate w-full' }, `${item.score} pts`)
                         );
                     })
-                ),
+                ),          ),
 
                 // Non-positive (0 or negative) scorers displayed neatly below if present
                 nonPosItems.length > 0 && h('div', { className: 'flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-800/80 text-xs' },
