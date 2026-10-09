@@ -1235,14 +1235,58 @@
                     const maxPts = Math.max(30, ...allDisplay.map(d => d.score));
                     const minPts = Math.min(0, ...allDisplay.map(d => d.score));
                     const domainPts = maxPts - minPts || 1;
-                    const zeroY = paddingTop + plotHeight - ((0 - minPts) / domainPts) * plotHeight;
+
+                    const roiTop = 82;
+                    const roiBottom = 275;
+                    const roiPlotHeight = roiBottom - roiTop;
+                    const zeroY = roiTop + roiPlotHeight - ((0 - minPts) / domainPts) * roiPlotHeight;
                     const barW = Math.min(26, (plotWidth / Math.max(1, allDisplay.length)) * 0.8);
 
+                    // Point range ticks for Y-axis scale
+                    const rawTicks = [maxPts, Math.round((maxPts + Math.min(0, minPts)) / 2), 0, ...(minPts < 0 ? [minPts] : [])];
+                    const uniqueTicks = [...new Set(rawTicks)].sort((a, b) => b - a);
+
                     return h('g', {},
-                        minPts < 0 && h('line', { x1: paddingLeft - 10, y1: zeroY, x2: width - paddingRight + 10, y2: zeroY, stroke: '#ef4444', strokeWidth: 1.5, strokeDasharray: '3 3' }),
+                        // Minimal Y-Axis scale lines & labels (points range)
+                        uniqueTicks.map((tickVal, tIdx) => {
+                            const tickY = roiTop + roiPlotHeight - ((tickVal - minPts) / domainPts) * roiPlotHeight;
+                            const isZero = tickVal === 0;
+                            return h('g', { key: 'ytick-' + tIdx },
+                                h('line', {
+                                    x1: paddingLeft - 6,
+                                    y1: tickY,
+                                    x2: width - paddingRight + 6,
+                                    y2: tickY,
+                                    stroke: isZero ? (minPts < 0 ? '#ef4444' : '#475569') : '#334155',
+                                    strokeWidth: isZero ? 1.5 : 1,
+                                    strokeDasharray: isZero ? (minPts < 0 ? '4 3' : 'none') : '2 2',
+                                    opacity: isZero ? 0.9 : 0.4
+                                }),
+                                h('text', {
+                                    x: paddingLeft - 10,
+                                    y: tickY + 4,
+                                    textAnchor: 'end',
+                                    fontSize: 9,
+                                    fontWeight: '800',
+                                    fill: isZero ? '#94a3b8' : '#64748b'
+                                }, `${tickVal > 0 ? '+' : ''}${tickVal}p`)
+                            );
+                        }),
+
+                        // Horizontal Separation Line below Pick Numbers
+                        h('line', {
+                            x1: paddingLeft - 10,
+                            y1: 26,
+                            x2: width - paddingRight + 10,
+                            y2: 26,
+                            stroke: '#475569',
+                            strokeWidth: 1.5,
+                            opacity: 0.6
+                        }),
+
                         allDisplay.map((item, i) => {
                             const bx = paddingLeft + (i / Math.max(1, allDisplay.length - 1)) * (plotWidth - barW);
-                            const bh = Math.max(2, (Math.abs(item.score) / domainPts) * plotHeight);
+                            const bh = Math.max(2, (Math.abs(item.score) / domainPts) * roiPlotHeight);
                             const by = item.score >= 0 ? zeroY - bh : zeroY;
 
                             const isFirstBackfill = item.isBackfill && (i === 0 || !allDisplay[i - 1].isBackfill);
@@ -1260,26 +1304,43 @@
                                 pickFormatted = `${roundNum}.${pickInRound}`;
                             }
 
-                            const badgeY = item.score >= 0 ? Math.max(paddingTop - 6, by - 6) : Math.min(paddingTop + plotHeight + 12, by + bh + 12);
-                            const nameY = item.score >= 0 ? zeroY + 14 : by + bh + 24;
                             const isDimmed = hoveredTeamId && hoveredTeamId !== item.teamId;
 
                             return h('g', { key: item.id || i, style: { opacity: isDimmed ? 0.15 : 1, transition: 'opacity 0.2s' } },
                                 // Vertical Round Divider Line
                                 isNewRound && h('g', { key: 'div-' + i },
-                                    h('line', { x1: divX, y1: paddingTop - 16, x2: divX, y2: paddingTop + plotHeight + 4, stroke: '#f59e0b', strokeWidth: 1.5, strokeDasharray: '4 3', opacity: 0.6 }),
-                                    h('text', { x: divX + 4, y: paddingTop - 18, fontSize: 9, fontWeight: '900', fill: '#fbbf24' }, `R${Math.floor(i / numTeams) + 1}`)
+                                    h('line', { x1: divX, y1: 26, x2: divX, y2: roiBottom + 4, stroke: '#f59e0b', strokeWidth: 1.5, strokeDasharray: '4 3', opacity: 0.6 }),
+                                    h('text', { x: divX + 3, y: 36, fontSize: 8, fontWeight: '900', fill: '#fbbf24' }, `R${Math.floor(i / numTeams) + 1}`)
                                 ),
 
                                 // Backfill Section Divider Line
                                 isFirstBackfill && h('g', { key: 'bf-div-' + i },
-                                    h('line', { x1: divX, y1: paddingTop - 16, x2: divX, y2: paddingTop + plotHeight + 4, stroke: '#ec4899', strokeWidth: 2, strokeDasharray: '4 3', opacity: 0.8 }),
-                                    h('text', { x: divX + 4, y: paddingTop - 18, fontSize: 9, fontWeight: '900', fill: '#f472b6' }, 'Backfill')
+                                    h('line', { x1: divX, y1: 26, x2: divX, y2: roiBottom + 4, stroke: '#ec4899', strokeWidth: 2, strokeDasharray: '4 3', opacity: 0.8 }),
+                                    h('text', { x: divX + 3, y: 36, fontSize: 8, fontWeight: '900', fill: '#f472b6' }, 'Backfill')
                                 ),
 
-                                // Pick Number [Round].[Pick] or 'BF' above positive / below negative bar
-                                h('text', { x: bx + barW/2, y: badgeY, textAnchor: 'middle', fontSize: 10, fontWeight: '900', fill: item.score < 0 ? '#ef4444' : item.isBackfill ? '#f472b6' : item.color }, pickFormatted),
+                                // Draft Pick Number aligned on fixed Y line (y = 16)
+                                h('text', {
+                                    x: bx + barW/2,
+                                    y: 16,
+                                    textAnchor: 'middle',
+                                    fontSize: 10,
+                                    fontWeight: '900',
+                                    fill: item.score < 0 ? '#ef4444' : item.isBackfill ? '#f472b6' : item.color
+                                }, pickFormatted),
 
+                                // Rotated Castaway Name at the top slanted up-right under separation line
+                                h('text', {
+                                    x: bx + barW/2,
+                                    y: 74,
+                                    textAnchor: 'start',
+                                    fontSize: 9,
+                                    fontWeight: '800',
+                                    fill: '#f8fafc',
+                                    transform: `rotate(-40 ${bx + barW/2} 74)`
+                                }, item.name.split(' ')[0]),
+
+                                // Bar Graph Rect
                                 h('rect', {
                                     x: bx,
                                     y: by,
@@ -1292,18 +1353,7 @@
                                     className: 'hover:brightness-125 cursor-pointer transition-all',
                                     onMouseEnter: () => setHoveredPoint({ teamId: item.teamId, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts ${item.isBackfill ? '(Backfilled)' : `(Pick ${pickFormatted})`}`, cx: bx + barW/2, cy: by }),
                                     onMouseLeave: () => setHoveredPoint(null)
-                                }),
-
-                                // Castaway name right below X-axis (or right below negative score bar), rotated to prevent overlap
-                                h('text', {
-                                    x: bx + barW/2,
-                                    y: nameY,
-                                    textAnchor: 'end',
-                                    fontSize: 9,
-                                    fontWeight: '800',
-                                    fill: '#f8fafc',
-                                    transform: `rotate(-35 ${bx + barW/2} ${nameY})`
-                                }, item.name.split(' ')[0])
+                                })
                             );
                         })
                     );
