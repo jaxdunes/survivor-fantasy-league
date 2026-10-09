@@ -1095,6 +1095,8 @@
                                             fill: 'transparent',
                                             className: 'cursor-pointer',
                                             onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: pt.episode, score: pt.score, playerBreakdown: pt.playerBreakdown, cx, cy }),
+                                            onTouchStart: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === s.id && hoveredPoint.episode === pt.episode ? null : { teamId: s.id, teamName: s.name, episode: pt.episode, score: pt.score, playerBreakdown: pt.playerBreakdown, cx, cy }); },
+                                            onClick: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === s.id && hoveredPoint.episode === pt.episode ? null : { teamId: s.id, teamName: s.name, episode: pt.episode, score: pt.score, playerBreakdown: pt.playerBreakdown, cx, cy }); },
                                             onMouseLeave: () => setHoveredPoint(null)
                                         })
                                     );
@@ -1143,6 +1145,8 @@
                                         style: { opacity: isDimmed ? 0.15 : 1, transition: 'opacity 0.2s' },
                                         className: 'transition-all hover:brightness-125 cursor-pointer',
                                         onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: ep, score: `${gain >= 0 ? `+${gain}` : gain} pts in Ep ${ep}`, cx: bx + barW/2, cy: by }),
+                                        onTouchStart: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === s.id && hoveredPoint.episode === ep ? null : { teamId: s.id, teamName: s.name, episode: ep, score: `${gain >= 0 ? `+${gain}` : gain} pts in Ep ${ep}`, cx: bx + barW/2, cy: by }); },
+                                        onClick: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === s.id && hoveredPoint.episode === ep ? null : { teamId: s.id, teamName: s.name, episode: ep, score: `${gain >= 0 ? `+${gain}` : gain} pts in Ep ${ep}`, cx: bx + barW/2, cy: by }); },
                                         onMouseLeave: () => setHoveredPoint(null)
                                     });
                                 })
@@ -1193,12 +1197,10 @@
                                             r: 12,
                                             fill: 'transparent',
                                             className: 'cursor-pointer',
-                                            onMouseEnter: () => {
-                                                setHoveredPoint({ teamId: s.id, teamName: s.name, episode: rh.episode, score: `Rank #${rh.rank} in Ep ${rh.episode}`, cx, cy });
-                                            },
-                                            onMouseLeave: () => {
-                                                setHoveredPoint(null);
-                                            }
+                                            onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: rh.episode, score: `Rank #${rh.rank} in Ep ${rh.episode}`, cx, cy }),
+                                            onTouchStart: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === s.id && hoveredPoint.episode === rh.episode ? null : { teamId: s.id, teamName: s.name, episode: rh.episode, score: `Rank #${rh.rank} in Ep ${rh.episode}`, cx, cy }); },
+                                            onClick: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === s.id && hoveredPoint.episode === rh.episode ? null : { teamId: s.id, teamName: s.name, episode: rh.episode, score: `Rank #${rh.rank} in Ep ${rh.episode}`, cx, cy }); },
+                                            onMouseLeave: () => setHoveredPoint(null)
                                         })
                                     );
                                 })
@@ -1360,6 +1362,8 @@
                                     rx: 3,
                                     className: 'hover:brightness-125 cursor-pointer transition-all',
                                     onMouseEnter: () => setHoveredPoint({ teamId: item.teamId, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts ${item.isBackfill ? '(Backfilled)' : `(Pick ${pickFormatted})`}`, cx: bx + barW/2, cy: by }),
+                                    onTouchStart: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === item.teamId && hoveredPoint.episode === item.name ? null : { teamId: item.teamId, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts ${item.isBackfill ? '(Backfilled)' : `(Pick ${pickFormatted})`}`, cx: bx + barW/2, cy: by }); },
+                                    onClick: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === item.teamId && hoveredPoint.episode === item.name ? null : { teamId: item.teamId, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts ${item.isBackfill ? '(Backfilled)' : `(Pick ${pickFormatted})`}`, cx: bx + barW/2, cy: by }); },
                                     onMouseLeave: () => setHoveredPoint(null)
                                 })
                             );
@@ -1370,7 +1374,8 @@
 
             const getTooltipPositionStyle = () => {
                 if (!hoveredPoint) return {};
-                const leftPct = (hoveredPoint.cx / width) * 100;
+                let leftPct = (hoveredPoint.cx / width) * 100;
+                leftPct = Math.max(12, Math.min(88, leftPct));
                 const topPct = (hoveredPoint.cy / height) * 100;
                 
                 const isNearTop = hoveredPoint.cy < 110;
@@ -1390,10 +1395,13 @@
                 };
             };
 
-            return h('div', { className: 'bg-slate-900/90 backdrop-blur-md rounded-2xl p-6 mb-8 shadow-2xl border border-amber-500/30 text-slate-100' },
+            return h('div', {
+                className: 'bg-slate-900/90 backdrop-blur-md rounded-2xl p-4 md:p-6 mb-8 shadow-2xl border border-amber-500/30 text-slate-100',
+                onClick: () => setHoveredPoint(null)
+            },
                 // Centered Visualization Navigation Selector
-                h('div', { className: 'flex justify-center items-center mb-5 w-full' },
-                    h('div', { className: 'flex bg-slate-950/80 p-1.5 rounded-xl gap-1.5 flex-wrap text-xs font-bold border border-amber-900/60 shadow-inner' },
+                h('div', { className: 'flex justify-center items-center mb-4 md:mb-5 w-full' },
+                    h('div', { className: 'flex bg-slate-950/80 p-1.5 rounded-xl gap-1 md:gap-1.5 flex-wrap text-xs font-bold border border-amber-900/60 shadow-inner justify-center' },
                         [
                             { id: 'cumulative', label: '📈 Cumulative' },
                             { id: 'weekly', label: '📊 Weekly Gains' },
@@ -1401,22 +1409,24 @@
                             { id: 'roi', label: '💡 Draft ROI' }
                         ].map(t => h('button', {
                             key: t.id,
-                            onClick: () => setChartMode(t.id),
-                            className: `px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                            onClick: (e) => { e.stopPropagation(); setChartMode(t.id); setHoveredPoint(null); },
+                            className: `px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                                 chartMode === t.id ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white font-black shadow-md border border-amber-400/50 scale-105' : 'text-amber-200/70 hover:text-white hover:bg-slate-800/80'
                             }`
                         }, t.label))
                     )
                 ),
 
-                // Main Layout Row: Vertical Stacked Team Legend on Left + SVG Graph on Right
-                h('div', { className: 'flex flex-col md:flex-row items-center justify-center gap-3 w-full overflow-visible' },
-                    // Left Side: Vertical Stacked Team Name Boxes (Centered vertically with graph & pulled closer)
-                    h('div', { className: 'flex flex-col justify-center gap-2 shrink-0 min-w-[130px] my-auto' },
+                // Main Layout: Responsive Team Legend (Row on Mobile, Vertical Stack on Desktop) + Touch-Scrollable SVG Graph
+                h('div', { className: 'flex flex-col md:flex-row items-stretch md:items-center justify-center gap-4 w-full overflow-visible' },
+                    // Team Legend Cards: Flex row wrap on mobile (< md), vertical stack on desktop (>= md)
+                    h('div', { className: 'flex flex-row flex-wrap md:flex-col justify-center gap-1.5 md:gap-2 shrink-0 w-full md:w-auto my-auto' },
                         series.map(s => h('div', {
                             key: s.id,
                             onMouseEnter: () => setHoveredTeamId(s.id),
                             onMouseLeave: () => setHoveredTeamId(null),
+                            onClick: (e) => { e.stopPropagation(); setHoveredTeamId(hoveredTeamId === s.id ? null : s.id); },
+                            onTouchStart: (e) => { e.stopPropagation(); setHoveredTeamId(hoveredTeamId === s.id ? null : s.id); },
                             className: `flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
                                 hoveredTeamId === s.id ? 'bg-amber-950 border-amber-500/80 scale-105 shadow-md text-amber-200' : 'bg-slate-800/80 border-amber-900/40 text-slate-300 hover:bg-slate-800'
                             }`
@@ -1429,11 +1439,11 @@
                         ))
                     ),
 
-                    // Right Side: SVG Graph & Tooltip Container
-                    h('div', { className: 'flex-1 w-full relative overflow-visible' },
+                    // SVG Graph Container with Horizontal Touch-Scroll for Mobile Viewports
+                    h('div', { className: 'flex-1 w-full relative overflow-x-auto overflow-y-hidden scrollbar-thin py-1 touch-pan-x' },
                         h('svg', { 
                             viewBox: `0 0 ${width} ${height}`, 
-                            className: 'w-full h-auto max-h-[320px] min-w-[450px] overflow-visible'
+                            className: 'w-full h-auto max-h-[340px] min-w-[580px] md:min-w-0 overflow-visible'
                         },
                             renderChartContent(),
                         
