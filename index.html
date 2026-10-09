@@ -778,9 +778,6 @@
 
                 // Fixed Baseline Chart Layout (Height 220px, Zero baseline locked at 130px in space)
                 h('div', { className: 'relative w-full h-[220px] px-[60px] pt-2 pb-6 flex items-center justify-around gap-4' },
-                    // Zero Baseline Line (ALWAYS fixed at 130px from top)
-                    h('div', { className: 'absolute left-[60px] right-[40px] top-[130px] h-[2px] bg-amber-500/60 z-10 shadow-xs' }),
-
                     roster.length === 0 ? h('div', { className: 'text-center text-slate-400 italic' }, 'No players on roster') :
                     roster.map(player => {
                         const pData = activeEpMap[player.id] || { totalPts: 0, posPts: 0, negPts: 0, events: [] };
@@ -1133,6 +1130,7 @@
                                     const bx = startX + sIdx * barW;
                                     const by = getBarY(gain);
                                     const bh = Math.max(2, paddingTop + plotHeight - by);
+                                    const isDimmed = hoveredTeamId && hoveredTeamId !== s.id;
 
                                     return h('rect', {
                                         key: s.id,
@@ -1142,6 +1140,7 @@
                                         height: bh,
                                         fill: s.style.hex,
                                         rx: 3,
+                                        style: { opacity: isDimmed ? 0.15 : 1, transition: 'opacity 0.2s' },
                                         className: 'transition-all hover:brightness-125 cursor-pointer',
                                         onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: ep, score: `${gain >= 0 ? `+${gain}` : gain} pts in Ep ${ep}`, cx: bx + barW/2, cy: by }),
                                         onMouseLeave: () => setHoveredPoint(null)
@@ -1217,6 +1216,7 @@
 
                         return {
                             id: p.id,
+                            teamId: s.id,
                             name: p.name,
                             teamName: s.name,
                             color: s.style.hex,
@@ -1261,8 +1261,9 @@
                             }
 
                             const badgeY = item.score >= 0 ? Math.max(paddingTop - 6, by - 6) : Math.min(paddingTop + plotHeight + 12, by + bh + 12);
+                            const isDimmed = hoveredTeamId && hoveredTeamId !== item.teamId;
 
-                            return h('g', { key: item.id || i },
+                            return h('g', { key: item.id || i, style: { opacity: isDimmed ? 0.15 : 1, transition: 'opacity 0.2s' } },
                                 // Vertical Round Divider Line
                                 isNewRound && h('g', { key: 'div-' + i },
                                     h('line', { x1: divX, y1: paddingTop - 16, x2: divX, y2: paddingTop + plotHeight + 4, stroke: '#f59e0b', strokeWidth: 1.5, strokeDasharray: '4 3', opacity: 0.6 }),
@@ -1276,17 +1277,19 @@
                                 ),
 
                                 // Pick Number [Round].[Pick] or 'BF' above positive / below negative bar
-                                h('text', { x: bx + barW/2, y: badgeY, textAnchor: 'middle', fontSize: 10, fontWeight: '900', fill: item.score < 0 ? '#ef4444' : item.isBackfill ? '#f472b6' : '#f97316' }, pickFormatted),
+                                h('text', { x: bx + barW/2, y: badgeY, textAnchor: 'middle', fontSize: 10, fontWeight: '900', fill: item.score < 0 ? '#ef4444' : item.isBackfill ? '#f472b6' : item.color }, pickFormatted),
 
                                 h('rect', {
                                     x: bx,
                                     y: by,
                                     width: barW,
                                     height: bh,
-                                    fill: item.score < 0 ? '#ef4444' : item.color,
+                                    fill: item.color,
+                                    stroke: item.score < 0 ? '#ef4444' : 'none',
+                                    strokeWidth: item.score < 0 ? 1.5 : 0,
                                     rx: 3,
                                     className: 'hover:brightness-125 cursor-pointer transition-all',
-                                    onMouseEnter: () => setHoveredPoint({ teamId: i, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts ${item.isBackfill ? '(Backfilled)' : `(Pick ${pickFormatted})`}`, cx: bx + barW/2, cy: by }),
+                                    onMouseEnter: () => setHoveredPoint({ teamId: item.teamId, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts ${item.isBackfill ? '(Backfilled)' : `(Pick ${pickFormatted})`}`, cx: bx + barW/2, cy: by }),
                                     onMouseLeave: () => setHoveredPoint(null)
                                 }),
 
@@ -1340,9 +1343,9 @@
                 ),
 
                 // Main Layout Row: Vertical Stacked Team Legend on Left + SVG Graph on Right
-                h('div', { className: 'flex flex-col md:flex-row items-start gap-5 w-full overflow-visible' },
-                    // Left Side: Vertical Stacked Team Name Boxes
-                    h('div', { className: 'flex flex-col gap-2 shrink-0 min-w-[150px] pt-1' },
+                h('div', { className: 'flex flex-col md:flex-row items-center justify-center gap-3 w-full overflow-visible' },
+                    // Left Side: Vertical Stacked Team Name Boxes (Centered vertically with graph & pulled closer)
+                    h('div', { className: 'flex flex-col justify-center gap-2 shrink-0 min-w-[130px] my-auto' },
                         series.map(s => h('div', {
                             key: s.id,
                             onMouseEnter: () => setHoveredTeamId(s.id),

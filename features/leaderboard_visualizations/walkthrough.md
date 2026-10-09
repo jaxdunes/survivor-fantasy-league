@@ -1,25 +1,27 @@
-# Walkthrough: Leaderboard Visualizations & Analytics Layout Refinements
+# Walkthrough: Draft ROI Team Color Coding & Breakdown Line Removal
 
 ## Overview
-Completed layout refinements for the **Analytics Top Section**, **Vertical Team Legend Stack**, **Clean Breakdown Header**, and **Uniform `<` `>` Navigation Arrows** on branch `feature/leaderboard-visualizations-and-roster-cards`.
+Completed refinements for **Draft ROI Team Color Coding**, **Team Legend Hover Dimming across all charts**, **Centered Vertical Legend Stack Alignment**, and **Breakdown Horizontal Line Removal** on branch `feature/leaderboard-visualizations-and-roster-cards`.
 
 ---
 
-## 🎨 Completed Refinements
+## 🎨 Completed Features & Refinements
 
-### 1. 🎯 Centered Analytics Navigation & Vertical Team Stack
-- **Header Text Removed**: Completely removed the `"📊 LEAGUE ANALYTICS & VISUALIZATIONS Interactive performance insights..."` text block from the top analytics box.
-- **Centered Navigation Bar**: The chart view tab selector buttons (`Cumulative`, `Weekly Gains`, `Rank Trajectory`, `Draft ROI`) are centered horizontally at the top of the analytics card.
-- **Vertical Team Name Boxes**: Team legend pills (`Ashlynn`, `Hayley`, `Scott`, `Ryan`, `Jordan`) are stacked vertically in a neat column on the left side of the chart.
+### 1. 🎨 Draft ROI Draft Team Color Coding & Interactive Legend Hover
+- **Fantasy Team Color Coding**: Each bar in the Draft ROI chart is color-coded according to the fantasy team that drafted the player (Ashlynn=Orange, Hayley=Indigo, Scott=Emerald, Ryan=Pink, Jordan=Purple).
+- **Interactive Legend Hover Dimming**: Hovering over any team in the left team legend stack highlights that team's drafted player bars and dims non-hovered teams down to 15% opacity across **all chart modes** (Cumulative, Weekly Gains, Rank Trajectory, and Draft ROI).
 
-### 2. 🎛️ Uniform `<` `>` Navigation Arrows & Clean Breakdown Header
-- **Uniform `<` `>` Arrow Symbols**: Navigation buttons use matching, simple `<` and `>` arrow symbols rendered in equal font size and line height.
-- **Removed Floating Border Line**: Removed the extra horizontal bottom border line under the breakdown header text.
+### 2. 📐 Centered & Pulled-In Team Legend Stack Alignment
+- **Centered Alignment**: The vertical stack of team legend cards is vertically centered (`items-center` / `my-auto`) alongside the graph SVG.
+- **Tighter Spacing**: Pulled the team legend stack closer to the chart plot area (`gap-3`, `min-w-[130px]`).
+
+### 3. 🧹 Episode & Player Event Breakdown Horizontal Line Removal
+- **Clean Chart Container**: Removed the horizontal line spanning across the Episode & Player Event Breakdown Box, leaving a clean, unobstructed background for radiating event bars.
 
 ---
 
 ## 🧪 Browser Verification
 - Verified in browser using `browser_subagent` on `index.html?league=jacks-league`.
 - Captured screenshots:
-  - Top Analytics Section (Centered tabs & vertical team stack): [analytics_section_top.png](file:///Users/ryantaylor/.gemini/antigravity-ide/brain/61645ed0-1614-4a93-8b68-7ccd78e3c76a/analytics_section_top_1791504442412.png)
-  - Episode 2 Breakdown (Matching `<` `>` arrows & clean header): [ashlynn_ep2_breakdown.png](file:///Users/ryantaylor/.gemini/antigravity-ide/brain/61645ed0-1614-4a93-8b68-7ccd78e3c76a/ashlynn_ep2_breakdown_1791504474534.png)
+  - Draft ROI chart with Ashlynn hover dimming: [draft_roi_hover_ashlynn.png](file:///Users/ryantaylor/.gemini/antigravity-ide/brain/61645ed0-1614-4a93-8b68-7ccd78e3c76a/draft_roi_hover_ashlynn_1791504860194.png)
+  - Expanded Breakdown box (No horizontal line): [ashlynn_breakdown_expanded.png](file:///Users/ryantaylor/.gemini/antigravity-ide/brain/61645ed0-1614-4a93-8b68-7ccd78e3c76a/ashlynn_breakdown_expanded_1791504915761.png)
