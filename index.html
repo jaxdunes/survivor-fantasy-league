@@ -1294,8 +1294,16 @@
                                     onMouseLeave: () => setHoveredPoint(null)
                                 }),
 
-                                // Castaway name right below X-axis (or right below negative score bar)
-                                h('text', { x: bx + barW/2, y: nameY, textAnchor: 'middle', fontSize: 9, fontWeight: '800', fill: '#f8fafc' }, item.name.split(' ')[0])
+                                // Castaway name right below X-axis (or right below negative score bar), rotated to prevent overlap
+                                h('text', {
+                                    x: bx + barW/2,
+                                    y: nameY,
+                                    textAnchor: 'end',
+                                    fontSize: 9,
+                                    fontWeight: '800',
+                                    fill: '#f8fafc',
+                                    transform: `rotate(-35 ${bx + barW/2} ${nameY})`
+                                }, item.name.split(' ')[0])
                             );
                         })
                     );
