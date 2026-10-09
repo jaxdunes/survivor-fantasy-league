@@ -755,29 +755,31 @@
                 // Header Controls for Episode Navigation
                 h('div', { className: 'flex justify-between items-center mb-4 flex-wrap gap-3 pb-3 border-b border-amber-900/50' },
                     h('div', {},
-                        h('span', { className: 'font-extrabold text-xs text-amber-400 uppercase tracking-wider block' }, '📊 EPISODE & PLAYER EVENT BREAKDOWN'),
+                        h('span', { className: 'font-extrabold text-xs text-amber-400 uppercase tracking-wider block' }, 'EPISODE & PLAYER EVENT BREAKDOWN'),
                         h('span', { className: 'text-xs text-amber-200/70 font-medium' }, `Team Total: ${selectedEpTotal >= 0 ? `+${selectedEpTotal}` : selectedEpTotal} pts`)
                     ),
 
-                    h('div', { className: 'flex items-center gap-2' },
-                        selectedEp > 1 && h('button', {
+                    h('div', { className: 'flex items-center gap-3' },
+                        h('button', {
                             onClick: () => setSelectedEp(prev => Math.max(1, prev - 1)),
-                            className: 'px-2.5 py-1 bg-slate-800 border border-amber-900/60 rounded-lg text-xs font-bold text-amber-200 hover:bg-slate-700 cursor-pointer shadow-2xs'
-                        }, '◄ Prev Ep'),
+                            disabled: selectedEp <= 1,
+                            className: `text-base font-black text-amber-400 hover:text-amber-200 cursor-pointer transition-transform hover:scale-125 select-none ${selectedEp <= 1 ? 'opacity-0 pointer-events-none' : 'opacity-80 hover:opacity-100'}`
+                        }, '◄'),
 
-                        h('div', { className: 'px-3.5 py-1 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg text-xs font-black shadow-xs' }, `Episode ${selectedEp}`),
+                        h('div', { className: 'text-sm font-black text-amber-300 min-w-[85px] text-center uppercase tracking-wider' }, `Episode ${selectedEp}`),
 
-                        selectedEp < maxEp && h('button', {
+                        h('button', {
                             onClick: () => setSelectedEp(prev => Math.min(maxEp, prev + 1)),
-                            className: 'px-2.5 py-1 bg-slate-800 border border-amber-900/60 rounded-lg text-xs font-bold text-amber-200 hover:bg-slate-700 cursor-pointer shadow-2xs'
-                        }, 'Next Ep ►')
+                            disabled: selectedEp >= maxEp,
+                            className: `text-base font-black text-amber-400 hover:text-amber-200 cursor-pointer transition-transform hover:scale-125 select-none ${selectedEp >= maxEp ? 'opacity-0 pointer-events-none' : 'opacity-80 hover:opacity-100'}`
+                        }, '►')
                     )
                 ),
 
-                // Fixed Baseline Chart Layout (Height 210px, Zero baseline locked at 120px across all episodes)
-                h('div', { className: 'relative w-full h-[210px] px-[60px] pt-2 pb-6 flex items-center justify-around gap-4' },
-                    // Zero Baseline Line (ALWAYS fixed at 120px from top)
-                    h('div', { className: 'absolute left-[60px] right-[40px] top-[120px] h-[2px] bg-amber-500/60 z-10 shadow-xs' }),
+                // Fixed Baseline Chart Layout (Height 220px, Zero baseline locked at 130px in space)
+                h('div', { className: 'relative w-full h-[220px] px-[60px] pt-2 pb-6 flex items-center justify-around gap-4' },
+                    // Zero Baseline Line (ALWAYS fixed at 130px from top)
+                    h('div', { className: 'absolute left-[60px] right-[40px] top-[130px] h-[2px] bg-amber-500/60 z-10 shadow-xs' }),
 
                     roster.length === 0 ? h('div', { className: 'text-center text-slate-400 italic' }, 'No players on roster') :
                     roster.map(player => {
@@ -786,19 +788,22 @@
                         const posEvents = pData.events.filter(e => e.pts > 0);
                         const negEvents = pData.events.filter(e => e.pts < 0);
 
-                        const posPx = Math.round((pData.posPts / globalMaxPos) * 85);
-                        const negPx = Math.round((pData.negPts / globalMaxNeg) * 45);
+                        const posPx = pData.posPts > 0 ? Math.round((pData.posPts / globalMaxPos) * 80) : 0;
+                        const negPx = pData.negPts > 0 ? Math.round((pData.negPts / globalMaxNeg) * 45) : 0;
 
                         return h('div', { key: player.id, className: 'flex-1 flex flex-col items-center h-full relative max-w-[90px]' },
-                            // Net Pts Label above positive bar (or baseline)
-                            h('div', { className: `text-xs font-black absolute text-center w-full ${netPts > 0 ? 'text-emerald-400' : netPts < 0 ? 'text-red-400' : 'text-slate-400'}`, style: { top: `${Math.max(4, 115 - Math.max(6, posPx) - 18)}px` } },
+                            // Net Pts Label (radiates with bars: above positive bar, below negative bar, or sitting right above baseline if 0 pts)
+                            h('div', {
+                                className: `text-xs font-black absolute text-center w-full ${netPts > 0 ? 'text-emerald-400' : netPts < 0 ? 'text-red-400' : 'text-slate-400'}`,
+                                style: { top: `${netPts > 0 ? 130 - posPx - 18 : netPts < 0 ? 130 + negPx + 4 : 110}px` }
+                            },
                                 `${netPts > 0 ? `+${netPts}` : netPts} pts`
                             ),
 
-                            // Positive Stack Container (grows UPWARD from 120px baseline)
-                            h('div', {
+                            // Positive Stack Container (grows UPWARD radiating from 130px baseline)
+                            posPx > 0 && h('div', {
                                 className: 'w-full max-w-[44px] bg-slate-800/60 rounded-t-lg overflow-hidden flex flex-col-reverse shadow-xs border border-amber-900/40 absolute',
-                                style: { height: `${Math.max(4, posPx)}px`, bottom: '90px' }
+                                style: { height: `${posPx}px`, top: `${130 - posPx}px` }
                             },
                                 posEvents.map((ev, evIdx) => {
                                     const segPct = (ev.pts / (pData.posPts || 1)) * 100;
@@ -813,10 +818,10 @@
                                 })
                             ),
 
-                            // Negative Stack Container (grows DOWNWARD from 120px baseline)
-                            pData.negPts > 0 && h('div', {
+                            // Negative Stack Container (grows DOWNWARD radiating from 130px baseline)
+                            negPx > 0 && h('div', {
                                 className: 'w-full max-w-[44px] bg-red-950/40 rounded-b-lg overflow-hidden flex flex-col shadow-xs border border-red-900/60 absolute',
-                                style: { height: `${Math.max(4, negPx)}px`, top: '122px' }
+                                style: { height: `${negPx}px`, top: '130px' }
                             },
                                 negEvents.map((ev, evIdx) => {
                                     const segPct = (Math.abs(ev.pts) / (pData.negPts || 1)) * 100;
@@ -831,8 +836,8 @@
                                 })
                             ),
 
-                            // Castaway Name Label below negative bar (or baseline)
-                            h('span', { className: 'text-xs font-extrabold text-slate-300 absolute bottom-0 text-center truncate max-w-[80px]' }, player.name.split(' ')[0])
+                            // Castaway Name Label fixed in position at bottom
+                            h('span', { className: 'text-xs font-extrabold text-slate-300 absolute bottom-1 text-center truncate max-w-[85px]' }, player.name.split(' ')[0])
                         );
                     })
                 ),
@@ -875,16 +880,18 @@
 
             if (items.length === 0) return null;
 
+            const positiveItems = items.filter(item => item.score > 0);
+            const nonPosItems = items.filter(item => item.score <= 0);
+
             return h('div', { className: 'bg-slate-900/90 border border-amber-500/30 rounded-xl p-4 mb-4 backdrop-blur-md shadow-xl text-slate-100' },
-                h('div', { className: 'flex justify-between items-center mb-2.5 flex-wrap gap-2' },
-                    h('span', { className: 'font-extrabold text-xs text-amber-400 uppercase tracking-wider' }, '📊 Roster Point Contribution'),
+                h('div', { className: 'flex justify-between items-center mb-3 flex-wrap gap-2' },
+                    h('span', { className: 'font-extrabold text-xs text-amber-400 uppercase tracking-wider' }, 'ROSTER POINT CONTRIBUTION'),
                     h('span', { className: 'text-xs font-black text-amber-200' }, `Team Score: ${totalTeamScore >= 0 ? `+${totalTeamScore}` : totalTeamScore} pts`)
                 ),
 
                 // Full-width Stacked Horizontal Rectangle Bar
-                h('div', { className: 'w-full h-6 bg-slate-950/80 rounded-lg overflow-hidden flex shadow-inner border border-amber-900/60 mb-3' },
-                    totalPosScore > 0 ? items.map(item => {
-                        if (item.score <= 0) return null;
+                h('div', { className: 'w-full h-7 bg-slate-950/80 rounded-lg overflow-hidden flex shadow-inner border border-amber-900/60 mb-2' },
+                    totalPosScore > 0 ? positiveItems.map(item => {
                         const pct = (item.score / totalPosScore) * 100;
                         return h('div', {
                             key: item.id,
@@ -897,17 +904,31 @@
                     }) : h('div', { className: 'w-full h-full bg-slate-800 flex items-center justify-center text-[11px] text-slate-400 italic' }, 'No positive points recorded')
                 ),
 
-                // Roster Breakdown Legend with Positive & Negative Scores
-                h('div', { className: 'flex flex-wrap items-center gap-3 text-xs font-semibold' },
-                    items.map(item => {
-                        const pct = totalPosScore > 0 && item.score > 0 ? Math.round((item.score / totalPosScore) * 100) : 0;
-                        return h('div', { key: item.id, className: 'flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-amber-900/40' },
-                            h('span', { className: 'w-2.5 h-2.5 rounded-full shrink-0 shadow-xs', style: { backgroundColor: item.score < 0 ? '#ef4444' : item.color } }),
-                            h('span', { className: 'text-slate-200 font-bold' }, item.name),
-                            h('span', { className: `font-extrabold ml-1 ${item.score > 0 ? 'text-emerald-400' : item.score < 0 ? 'text-red-400' : 'text-slate-400'}` }, `${item.score > 0 ? `+${item.score}` : item.score} pts`),
-                            item.score > 0 && h('span', { className: 'text-slate-400 text-[10px] font-bold' }, `(${pct}%)`)
+                // Player Names Aligned Directly Under Their Respective Section of the Bar
+                totalPosScore > 0 && h('div', { className: 'w-full flex text-xs mb-2' },
+                    positiveItems.map(item => {
+                        const pct = (item.score / totalPosScore) * 100;
+                        return h('div', {
+                            key: item.id,
+                            style: { width: `${pct}%` },
+                            className: 'flex flex-col items-center justify-start text-center px-0.5 overflow-hidden'
+                        },
+                            h('span', { className: 'text-[11px] font-extrabold text-slate-200 truncate w-full' }, item.name.split(' ')[0]),
+                            h('span', { className: 'text-[10px] font-black text-amber-400 truncate w-full' }, `+${item.score} (${Math.round(pct)}%)`)
                         );
                     })
+                ),
+
+                // Non-positive (0 or negative) scorers displayed neatly below if present
+                nonPosItems.length > 0 && h('div', { className: 'flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-800/80 text-xs' },
+                    h('span', { className: 'text-[10px] font-bold text-slate-400 uppercase tracking-wide mr-1' }, 'Other Roster Members:'),
+                    nonPosItems.map(item =>
+                        h('div', { key: item.id, className: 'flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700/60' },
+                            h('span', { className: 'w-2.5 h-2.5 rounded-full shrink-0 shadow-xs', style: { backgroundColor: item.score < 0 ? '#ef4444' : '#94a3b8' } }),
+                            h('span', { className: 'text-slate-200 font-bold' }, item.name.split(' ')[0]),
+                            h('span', { className: `font-extrabold ${item.score < 0 ? 'text-red-400' : 'text-slate-400'}` }, `${item.score} pts`)
+                        )
+                    )
                 )
             );
         }
@@ -1201,7 +1222,7 @@
                             color: s.style.hex,
                             isBackfill: isBf,
                             overallPick: pIdx + 1,
-                            score: Math.max(0, totalPts)
+                            score: totalPts
                         };
                     }));
 
@@ -1212,13 +1233,17 @@
                     const allDisplay = [...draftedOnly, ...backfilledOnly];
 
                     const maxPts = Math.max(30, ...allDisplay.map(d => d.score));
+                    const minPts = Math.min(0, ...allDisplay.map(d => d.score));
+                    const domainPts = maxPts - minPts || 1;
+                    const zeroY = paddingTop + plotHeight - ((0 - minPts) / domainPts) * plotHeight;
                     const barW = Math.min(26, (plotWidth / Math.max(1, allDisplay.length)) * 0.8);
 
                     return h('g', {},
+                        minPts < 0 && h('line', { x1: paddingLeft - 10, y1: zeroY, x2: width - paddingRight + 10, y2: zeroY, stroke: '#ef4444', strokeWidth: 1.5, strokeDasharray: '3 3' }),
                         allDisplay.map((item, i) => {
                             const bx = paddingLeft + (i / Math.max(1, allDisplay.length - 1)) * (plotWidth - barW);
-                            const bh = (item.score / maxPts) * plotHeight;
-                            const by = paddingTop + plotHeight - bh;
+                            const bh = Math.max(2, (Math.abs(item.score) / domainPts) * plotHeight);
+                            const by = item.score >= 0 ? zeroY - bh : zeroY;
 
                             const isFirstBackfill = item.isBackfill && (i === 0 || !allDisplay[i - 1].isBackfill);
                             const isNewRound = !item.isBackfill && i > 0 && i % numTeams === 0;
@@ -1235,6 +1260,8 @@
                                 pickFormatted = `${roundNum}.${pickInRound}`;
                             }
 
+                            const badgeY = item.score >= 0 ? Math.max(paddingTop - 6, by - 6) : Math.min(paddingTop + plotHeight + 12, by + bh + 12);
+
                             return h('g', { key: item.id || i },
                                 // Vertical Round Divider Line
                                 isNewRound && h('g', { key: 'div-' + i },
@@ -1248,15 +1275,15 @@
                                     h('text', { x: divX + 4, y: paddingTop - 18, fontSize: 9, fontWeight: '900', fill: '#f472b6' }, 'Backfill')
                                 ),
 
-                                // Pick Number [Round].[Pick] or 'BF' on top of bar
-                                h('text', { x: bx + barW/2, y: Math.max(paddingTop - 6, by - 6), textAnchor: 'middle', fontSize: 10, fontWeight: '900', fill: item.isBackfill ? '#f472b6' : '#f97316' }, pickFormatted),
+                                // Pick Number [Round].[Pick] or 'BF' above positive / below negative bar
+                                h('text', { x: bx + barW/2, y: badgeY, textAnchor: 'middle', fontSize: 10, fontWeight: '900', fill: item.score < 0 ? '#ef4444' : item.isBackfill ? '#f472b6' : '#f97316' }, pickFormatted),
 
                                 h('rect', {
                                     x: bx,
                                     y: by,
                                     width: barW,
                                     height: bh,
-                                    fill: item.color,
+                                    fill: item.score < 0 ? '#ef4444' : item.color,
                                     rx: 3,
                                     className: 'hover:brightness-125 cursor-pointer transition-all',
                                     onMouseEnter: () => setHoveredPoint({ teamId: i, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts ${item.isBackfill ? '(Backfilled)' : `(Pick ${pickFormatted})`}`, cx: bx + barW/2, cy: by }),
