@@ -1209,10 +1209,17 @@
 
                 if (chartMode === 'roi') {
                     const numTeams = series.length || 5;
+                    const picksArr = (draftState && Array.isArray(draftState.picks)) ? draftState.picks : [];
+
                     const allPlayersWithMeta = series.flatMap(s => s.roster.map((p, pIdx) => {
                         const isBf = getBackfillEpisode(p.id, draftState) !== null || Boolean(draftState && draftState.backfilledPlayers && (draftState.backfilledPlayers[p.id] || draftState.backfilledPlayers[String(p.id)]));
                         const pScores = (scores || {})[p.id] || (scores || {})[String(p.id)] || {};
                         const totalPts = Math.round(Object.values(pScores).flatMap(e => Object.values(e)).reduce((a, b) => a + (b.points || 0), 0));
+
+                        const pickObj = picksArr.find(pk => String(pk.playerId) === String(p.id) || (pk.name && pk.name === p.name));
+                        const sIdx = series.findIndex(ts => ts.id === s.id);
+                        const fallbackPickNum = pIdx * numTeams + (sIdx >= 0 ? sIdx + 1 : 1);
+                        const overallPick = pickObj && pickObj.pickNumber ? pickObj.pickNumber : fallbackPickNum;
 
                         return {
                             id: p.id,
@@ -1221,7 +1228,7 @@
                             teamName: s.name,
                             color: s.style.hex,
                             isBackfill: isBf,
-                            overallPick: pIdx + 1,
+                            overallPick: overallPick,
                             score: totalPts
                         };
                     }));
@@ -1299,8 +1306,9 @@
                             if (item.isBackfill) {
                                 pickFormatted = 'BF';
                             } else {
-                                const roundNum = Math.floor(i / numTeams) + 1;
-                                const pickInRound = (i % numTeams) + 1;
+                                const pickNum = item.overallPick || (i + 1);
+                                const roundNum = Math.floor((pickNum - 1) / numTeams) + 1;
+                                const pickInRound = ((pickNum - 1) % numTeams) + 1;
                                 pickFormatted = `${roundNum}.${pickInRound}`;
                             }
 
