@@ -173,6 +173,7 @@
         inProgressEpisode = null,
         episodeStatuses = [],
         onSelectEpisode,
+        onOpenModal,
         theme = 'tribal'
     }) {
         if (!h) return null;
@@ -188,9 +189,16 @@
                 h('div', { className: 'flex items-center gap-2' },
                     h('span', { className: 'text-lg' }, '📺'),
                     h('span', { className: 'text-xs font-black uppercase tracking-wider text-gray-800 font-mono' }, 'Episodes Scored:'),
-                    h('span', {
-                        className: 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-mono'
-                    }, viewingEpNum === 0 ? 'Viewing: Pre-Season' : `Viewing: Ep ${viewingEpNum}`)
+                    h('button', {
+                        type: 'button',
+                        id: 'tracker-viewing-badge-btn',
+                        onClick: onOpenModal,
+                        title: onOpenModal ? 'Click to open Episode Selector / Catch-Up modal' : '',
+                        className: `text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-mono flex items-center gap-1 transition ${onOpenModal ? 'hover:bg-orange-200 cursor-pointer shadow-xs' : ''}`
+                    },
+                        h('span', {}, viewingEpNum === 0 ? 'Viewing: Pre-Season' : `Viewing: Ep ${viewingEpNum}`),
+                        onOpenModal ? h('span', { className: 'text-[9px] text-orange-600 font-normal opacity-70' }, '✎') : null
+                    )
                 ),
                 h('div', { className: 'hidden sm:flex items-center gap-2 text-[10px] font-bold text-gray-500 border-l border-gray-200 pl-3' },
                     h('span', { className: 'flex items-center gap-1' },
