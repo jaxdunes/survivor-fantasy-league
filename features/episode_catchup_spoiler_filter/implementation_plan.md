@@ -1,9 +1,9 @@
-# Implementation Plan: Episode Catch-Up & Spoiler Protection (Time-Travel Mode)
+# Implementation Plan: Episode Catch-Up, In-Progress Live Scoring & Global Site-Wide Filter
 
 **Target Branch**: `feature/episode-catchup-spoiler-filter`  
 **Location**: `features/episode_catchup_spoiler_filter/implementation_plan.md`  
 **Status**: Approved & Ready for Execution  
-**Target Files**: `index.html`, `js/scoring-engine.js`, `js/config.js`  
+**Target Files**: `index.html`, `draft.html`, `chat.html`, `js/scoring-engine.js`, `js/config.js`, `js/episode-filter.js`  
 
 ---
 
@@ -12,105 +12,78 @@
 
 ---
 
-## 1. Technical Architecture & State Model
+## 1. Technical Architecture & Cross-Page State Model
 
-### 1.1 State Schema
-In `index.html` (React root component):
+To support universal episode selection across **all pages** (`index.html`, `draft.html`, `chat.html`), core filter logic and UI components will be organized in a modular shared file: [`js/episode-filter.js`](file:///Users/ryantaylor/Desktop/survivor-fantasy-league/js/episode-filter.js).
+
+### 1.1 State Schema & Storage Synchronization
 ```javascript
-// Current episode being inspected across all visualizations and leaderboards
-const [viewingEpisode, setViewingEpisode] = useState(null);
-
-// Furthest episode confirmed watched by user during this session/cookie
-const [maxConfirmedEpisode, setMaxConfirmedEpisode] = useState(null);
-
-// Modal visibility states
-const [showCatchUpEntranceModal, setShowCatchUpEntranceModal] = useState(false);
-const [pendingConfirmEpisode, setPendingConfirmEpisode] = useState(null); // For spoiler prompt
-```
-
-### 1.2 Cookie & Storage Structure
-Cookie Name: `survivor_catchup_${seasonId}` (with matching key in `localStorage` for cross-platform resilience).
-```json
+// State stored in survivor_catchup_${seasonId} (Cookie + LocalStorage)
 {
-  "maxWatchedEpisode": 2,
-  "latestScoredEpisodeAtChoice": 2,
-  "isLive": false,
+  "maxWatchedEpisode": 2,             // Furthest confirmed episode watched
+  "viewingEpisode": 3,                // Current episode being inspected (or in-progress ep)
+  "latestScoredEpisodeAtChoice": 3,   // Latest scored ep when user last made a choice
+  "isLiveStreaming": true,            // True if viewing an in-progress episode
   "updatedAt": 1728750000000
 }
 ```
 
-**Invalidation Logic**:
-```javascript
-function evaluateCatchUpStatus(currentSeasonId, latestScoredEpisode) {
-    const saved = getCatchUpCookie(currentSeasonId);
-    if (!saved) {
-        return { needsModal: true, initialEp: latestScoredEpisode };
-    }
-    // If commissioner scored a new episode since the user's last selection
-    if (latestScoredEpisode > saved.latestScoredEpisodeAtChoice) {
-        return { 
-            needsModal: true, 
-            initialEp: saved.maxWatchedEpisode, // Hold them safe at last known watched
-            isStale: true 
-        };
-    }
-    return { 
-        needsModal: false, 
-        initialEp: saved.maxWatchedEpisode 
-    };
-}
-```
+- **Cross-Tab & Cross-Page Sync**:
+  - `window.addEventListener('storage', ...)` notifies other open tabs and pages when the episode filter changes.
+  - Custom DOM events `window.dispatchEvent(new CustomEvent('episodeFilterChanged', { detail }))` sync state in-memory across loaded components.
+
+### 1.2 In-Progress Live Scoring Mechanism
+1. **Firebase Listeners**:
+   - `scoresRef.on('value')` and `eliminationRef.on('value')` remain active.
+2. **Dynamic Streaming Filter**:
+   - When `viewingEpisode === inProgressEpisode`: Newly entered points stream directly into total scores, graphs, and breakdowns in real time.
+   - When `viewingEpisode < inProgressEpisode`: Newly entered points for `ep > viewingEpisode` are filtered out in memory, keeping viewers on past episodes 100% spoiler-free.
+   - The global tracker bar dynamically updates the in-progress badge in real-time (`⚪ E3: Being Scored (N events)`), alerting all users that scoring is happening live.
 
 ---
 
 ## 2. Implementation Phases & Step-by-Step Breakdown
 
 ### Phase 1: Pure Scoring & Masking Engine Utilities (`js/scoring-engine.js`)
-- **Step 1.1**: Create `filterScoresByEpisode(scores, targetEpisode)`:
+- **Step 1.1**: Implement `filterScoresByEpisode(scores, targetEpisode, allowInProgress)`:
   - Takes raw player scores and strips out all episode keys `ep > targetEpisode`.
-- **Step 1.2**: Create `filterEliminationsByEpisode(eliminationOrder, targetEpisode)`:
+  - When `allowInProgress` is true, includes live scores currently logged for `targetEpisode`.
+- **Step 1.2**: Implement `filterEliminationsByEpisode(eliminationOrder, targetEpisode)`:
   - Takes elimination map `{ [playerId]: episodeNumber }` and removes entries where `eliminationOrder[id] > targetEpisode`.
-- **Step 1.3**: Create `filterWinnerByEpisode(winner, targetEpisode, finaleEpisode)`:
+- **Step 1.3**: Implement `filterWinnerByEpisode(winner, targetEpisode, finaleEpisode)`:
   - Suppresses winner bonus if `targetEpisode < finaleEpisode`.
-- **Step 1.4**: Helper `computeLatestScoredEpisode(scores, eliminationOrder, scoredEpisodes)`:
-  - Accurately computes the highest episode number that has scored data or completed status.
+- **Step 1.4**: Helper `computeEpisodeStatuses(scores, eliminationOrder, scoredEpisodes)`:
+  - Returns status map for episodes 1..14: `completed` (✓), `in-progress` (⚪), or `unscored` (✗).
 
-### Phase 2: Cookie & Safe State Management (`js/config.js` or `index.html`)
-- **Step 2.1**: Implement `setCatchUpCookie(seasonId, data)` and `getCatchUpCookie(seasonId)`:
-  - Handles cookie creation with `SameSite=Lax; path=/; max-age=31536000`.
-  - Fallback syncing to `localStorage`.
-- **Step 2.2**: Implement real-time listener safeguard:
-  - If a new episode is scored while user is on the site, prevent auto-updating live scores. Display a non-spoiler notification toast instead.
+### Phase 2: Shared Filter Module (`js/episode-filter.js`)
+- **Step 2.1**: State management methods:
+  - `getCatchUpState(seasonId)` & `setCatchUpState(seasonId, data)` (Cookie + LocalStorage).
+  - `evaluateCatchUpStatus(seasonId, currentStatuses)`: Evaluates if modal is needed, whether cookie is stale, and safe initial episode.
+- **Step 2.2**: Reusable React Components:
+  - `UniversalEpisodeTracker`: Renders the "Episodes Scored" bar with completed, in-progress (pulsing ⚪), unwatched, and disabled states.
+  - `CatchUpEntranceModal`: Modal for first-time / stale season entry with "I'm Live!" CTA and earlier episode selector.
+  - `SpoilerConfirmModal`: Confirmation prompt when attempting to scrub forward.
+  - `HistoricalStatusBanner`: Header banner displaying `"⏳ Historical View: As of Episode N | [⚡ Jump to Live]"`.
 
-### Phase 3: UI Components in `index.html`
-- **Step 3.1: First-Time Entrance Modal (`CatchUpEntranceModal`)**:
-  - Tribal / parchment aesthetic matching Survivor theme.
-  - Explains the season is active.
-  - Prominent Primary Button: `"⚡ I'm Live! Take me to Episode X"`.
-  - Scored Episode Box: Buttons for each earlier episode (`Episode 1`, `Episode 2`, ... up to `X-1`).
-  - Stores selection in cookie and sets `viewingEpisode`.
-- **Step 3.2: Episode Confirmation Prompt (`SpoilerConfirmModal`)**:
-  - Intercepts clicks on episodes ahead of `maxConfirmedEpisode`.
-  - Displays clear spoiler warning asking for explicit confirmation.
-- **Step 3.3: Global `EpisodesScoredTracker` Updates**:
-  - Episodes `1..viewingEpisode` render as **Lit Up / Active** (green/emerald).
-  - Episodes `viewingEpisode+1 .. latestScoredEpisode` render as **Unwatched / Dimmed**.
-  - Future unscored episodes render as **Disabled / Locked**.
-  - Free backward scrubbing: Clicking an episode `<= maxConfirmedEpisode` switches view instantly without warning prompt.
-- **Step 3.4: Visual Indicator Bar ("Historical View Banner")**:
-  - When `viewingEpisode < latestScoredEpisode`, display a clean header pill/banner:
-    `"⏳ Time-Travel View: As of Episode N | [⚡ Jump to Live (Episode X)]"`.
+### Phase 3: Integration into `index.html`
+- **Step 3.1**: Include `js/episode-filter.js`.
+- **Step 3.2**: Mount `UniversalEpisodeTracker` at top of leaderboard.
+- **Step 3.3**: Connect `viewingEpisode` to:
+  - `getTeamScore`, `leaderboard`, and parchment torches (`TorchLit` vs `TorchUnlit`).
+  - `TeamScoreGraph` (charts truncated to `viewingEpisode`).
+  - Live streaming updates when `viewingEpisode === inProgressEp`.
 
-### Phase 4: System-Wide Integration in `index.html`
-- **Step 4.1**: Feed masked `filteredScores` and `filteredEliminations` into:
-  - `getTeamScore(teamId)`
-  - `leaderboard` calculation
-  - Roster card torches (`TorchLit` vs `TorchUnlit`)
-  - Elimination bonus calculations
-  - `playersByTribe` via `window.getTribeForEpisode(p, viewingEpisode)`
-- **Step 4.2**: Feed `viewingEpisode` into `TeamScoreGraph`:
-  - Main league charts (Cumulative, Weekly Gains, Rank Trajectory, Draft ROI) truncated to `viewingEpisode`.
-  - Expanded team breakdown stacked bars truncated to `viewingEpisode`.
+### Phase 4: Integration into `draft.html`
+- **Step 4.1**: Include `js/episode-filter.js` and mount `UniversalEpisodeTracker` in draft board header.
+- **Step 4.2**: Mask contestant elimination state (eliminated after `viewingEpisode` shows alive).
+- **Step 4.3**: Mask backfilled drafted roster assignments: players backfilled in `ep > viewingEpisode` appear in draft pool, not on team rosters.
+
+### Phase 5: Integration into `chat.html`
+- **Step 5.1**: Include `js/episode-filter.js` and mount `UniversalEpisodeTracker` in chat header.
+- **Step 5.2**: Render Spoiler Advisory Banner when `viewingEpisode < latestScoredEpisode`:
+  > *"⚠️ Spoiler Advisory: You are viewing Episode N. Live chat messages may contain spoilers for later episodes."*
+- **Step 5.3**: Render Live Scoring Banner when `viewingEpisode === inProgressEpisode`:
+  > *"⚪ Live Scoring Active: Episode N is currently being scored."*
 
 ---
 
@@ -118,24 +91,23 @@ function evaluateCatchUpStatus(currentSeasonId, latestScoredEpisode) {
 
 ### Test Environment Setup
 - Tests run against isolated mock data in `dev_testing/` Firebase path.
-- Mock scenario: Season 51 with 3 completed episodes:
-  - Ep 1: Contestant A scores 15 pts, Contestant B eliminated (Ep 1).
-  - Ep 2: Contestant C scores 10 pts, Contestant D eliminated (Ep 2).
-  - Ep 3: Contestant A scores 10 pts, Contestant E eliminated (Ep 3).
+- Mock scenario: Season 51 with Ep 1 & 2 completed, and Ep 3 currently in-progress.
 
 ### Test Matrix
 
 | ID | Test Scenario | Expected Outcome | Status |
 | :--- | :--- | :--- | :--- |
-| **TC-1.1** | User views Episode 1 | Contestant D and E show **ALIVE** with lit torches; Ep 2 & 3 points are 0; Team scores only reflect Ep 1. | Pending |
-| **TC-1.2** | User views Episode 2 | Contestant D shows **ELIMINATED** (unlit torch); Contestant E shows **ALIVE** (lit torch); Ep 3 points excluded. | Pending |
-| **TC-1.3** | User views Episode 3 (Live) | Contestants B, D, and E all show eliminated; all points included. | Pending |
-| **TC-2.1** | First visit to active season (no cookie) | Catch-Up Entrance Modal appears; background content blurred/shielded; user cannot see scores until selection made. | Pending |
-| **TC-2.2** | Click "I'm Live! (Episode 3)" | Modal closes; site renders Episode 3; cookie set to `{ maxWatched: 3, latestScored: 3 }`. | Pending |
-| **TC-2.3** | Select "Episode 1" in modal | Modal closes; site renders Episode 1; cookie set to `{ maxWatched: 1, latestScored: 3 }`. | Pending |
-| **TC-3.1** | Return visit when no new episodes scored | Site loads directly into user's saved episode view without modal popping up. | Pending |
-| **TC-3.2** | Return visit after Episode 4 is scored | Cookie detects `latestScored (4) > choice (3)`; modal triggers; site safely remains masked at Ep 1 or Ep 3 until user confirms. | Pending |
+| **TC-1.1** | User views Episode 1 | Ep 2 & 3 points excluded; contestants eliminated in Ep 2 & 3 show **ALIVE** with lit torches. | Pending |
+| **TC-1.2** | User views Episode 2 | Ep 2 points included; Ep 3 points excluded; Ep 3 eliminated contestant shows **ALIVE**. | Pending |
+| **TC-1.3** | User views In-Progress Ep 3 | Enters Live Scoring Mode; Ep 3 scores stream in real-time as admin enters them; tracker shows pulsing `⚪ LIVE`. | Pending |
+| **TC-1.4** | Live point entered while on Ep 2 | Admin adds point to Ep 3 in Firebase; user on Ep 2 sees Ep 3 tracker badge update to `⚪ (N+1)`, but team scores do NOT change (no spoiler leak). | Pending |
+| **TC-2.1** | First visit to active season (no cookie) | Catch-Up Entrance Modal blocks view until user selects "I'm Live!" or an earlier episode. | Pending |
+| **TC-2.2** | Select "I'm Live!" when Ep 3 in progress | Site renders Ep 3 live streaming mode; cookie updated to Ep 3. | Pending |
+| **TC-3.1** | Return visit when Ep 4 starts being scored | Safe freeze holds view at prior watched episode (e.g. Ep 2); modal triggers to offer Ep 4. | Pending |
 | **TC-4.1** | Scrubbing backward (Ep 3 down to Ep 1) | Instant switch to Ep 1 state; no confirmation dialog required; tracker highlights Ep 1. | Pending |
-| **TC-4.2** | Scrubbing forward (Ep 1 up to Ep 2) | Spoiler warning modal appears: *"Confirm Episode 2?"*; clicking Cancel retains Ep 1; clicking Confirm advances to Ep 2. | Pending |
+| **TC-4.2** | Scrubbing forward (Ep 1 up to Ep 2) | Spoiler warning modal appears: *"Confirm Episode 2?"*; clicking Cancel retains Ep 1. | Pending |
 | **TC-5.1** | Non-selectable future episodes | Unscored episodes (e.g. Ep 5..14) are disabled and cannot be clicked. | Pending |
-| **TC-6.1** | League Graph truncation | Main graph X-axis terminates at `viewingEpisode`; tooltip only contains scores up to `viewingEpisode`. | Pending |
+| **TC-6.1** | Cross-Page State: `index.html` to `draft.html` | Changing episode to Ep 1 on `index.html` persists when navigating to `draft.html`; draft displays Ep 1 state. | Pending |
+| **TC-6.2** | Draft Board Backfill Masking | Player backfilled in Ep 3 appears unassigned when viewing Ep 1 or 2 on `draft.html`. | Pending |
+| **TC-7.1** | Chat Spoiler Advisory Banner | When viewing Ep 1, `chat.html` renders yellow warning banner alerting user of potential spoilers in chat. | Pending |
+| **TC-7.2** | Chat Live Scoring Banner | When viewing in-progress Ep 3, `chat.html` renders live scoring banner. | Pending |
