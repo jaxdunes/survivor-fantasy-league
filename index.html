@@ -1005,12 +1005,16 @@
                             const bfEp = getBackfillEpisode(player.id, draftState);
                             if (bfEp === null || ep > bfEp) {
                                 const playerScores = (scores[player.id] || {})[ep] || {};
-                                Object.values(playerScores).forEach(score => {
-                                    const pts = (score.points || 0);
-                                    cumulative += pts;
-                                    epGain += pts;
-                                    pEpPts += pts;
-                                });
+                                if (playerScores && typeof playerScores === 'object') {
+                                    Object.values(playerScores).forEach(score => {
+                                        if (score && typeof score === 'object') {
+                                            const pts = (score.points || 0);
+                                            cumulative += pts;
+                                            epGain += pts;
+                                            pEpPts += pts;
+                                        }
+                                    });
+                                }
                                 if (eliminationOrder && (eliminationOrder[player.id] === ep || eliminationOrder[String(player.id)] === ep)) {
                                     cumulative += ep;
                                     epGain += ep;
@@ -1238,7 +1242,12 @@
                     const allPlayersWithMeta = series.flatMap(s => s.roster.map((p, pIdx) => {
                         const isBf = getBackfillEpisode(p.id, draftState) !== null || Boolean(draftState && draftState.backfilledPlayers && (draftState.backfilledPlayers[p.id] || draftState.backfilledPlayers[String(p.id)]));
                         const pScores = (scores || {})[p.id] || (scores || {})[String(p.id)] || {};
-                        const totalPts = Math.round(Object.values(pScores).flatMap(e => Object.values(e)).reduce((a, b) => a + (b.points || 0), 0));
+                        const totalPts = Math.round(
+                            Object.values(pScores)
+                                .filter(e => e && typeof e === 'object')
+                                .flatMap(e => Object.values(e))
+                                .reduce((a, b) => a + ((b && typeof b === 'object' && b.points) ? b.points : 0), 0)
+                        );
 
                         const pickObj = picksArr.find(pk => String(pk.playerId) === String(p.id) || (pk.name && pk.name === p.name));
                         const sIdx = series.findIndex(ts => ts.id === s.id);

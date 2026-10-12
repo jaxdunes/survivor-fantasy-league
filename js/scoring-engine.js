@@ -328,8 +328,8 @@ function filterScoresByEpisode(scores = {}, targetEpisode = 14, allowInProgress 
 
         Object.entries(playerEpisodes).forEach(([epKey, epScores]) => {
             const epNum = parseInt(epKey);
-            if (isNaN(epNum)) return;
-            if (epNum <= maxEp) {
+            if (isNaN(epNum) || epNum <= 0) return;
+            if (epScores && typeof epScores === 'object' && epNum <= maxEp) {
                 filteredEpisodes[epKey] = epScores;
                 hasEpisodes = true;
             }
@@ -440,7 +440,7 @@ function computeEpisodeStatuses(scores = {}, eliminationOrder = {}, scoredEpisod
         Object.values(scores || {}).forEach(playerScores => {
             if (playerScores && (playerScores[ep] || playerScores[String(ep)])) {
                 const epObj = playerScores[ep] || playerScores[String(ep)];
-                if (typeof epObj === 'object') {
+                if (epObj && typeof epObj === 'object') {
                     const numScores = Object.keys(epObj).length;
                     if (numScores > 0) {
                         hasPoints = true;
