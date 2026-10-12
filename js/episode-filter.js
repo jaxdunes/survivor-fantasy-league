@@ -182,7 +182,7 @@
         const maxWatchedNum = (maxWatchedEpisode !== undefined && maxWatchedEpisode !== null && !isNaN(parseInt(maxWatchedEpisode))) ? parseInt(maxWatchedEpisode) : 1;
 
         return h('div', {
-            className: 'bg-white/95 backdrop-blur-md rounded-2xl p-4 mb-6 shadow-xl border border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4'
+            className: 'bg-white/95 backdrop-blur-md rounded-2xl p-4 mb-6 shadow-xl border border-gray-100 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3.5'
         },
             // Left Label & Legend
             h('div', { className: 'flex flex-wrap items-center gap-3' },
@@ -217,7 +217,7 @@
             ),
 
             // Episode Badges
-            h('div', { className: 'flex flex-wrap items-center gap-1.5 w-full md:w-auto overflow-x-auto py-1' },
+            h('div', { className: 'flex flex-wrap items-center gap-1.5 w-full xl:w-auto py-1' },
                 episodeStatuses.map(item => {
                     const ep = item.ep;
                     const isViewing = ep === viewingEpNum;
@@ -229,10 +229,14 @@
                     let titleText = `Episode ${ep}: ${item.label}`;
 
                     if (isViewing && isInProgress) {
-                        badgeStyle = 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-white font-extrabold ring-2 ring-cyan-400 ring-offset-1 shadow-lg animate-pulse cursor-pointer';
+                        badgeStyle = isTribal
+                            ? 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-white font-extrabold ring-2 ring-cyan-400 ring-offset-2 ring-offset-[#1a120d] shadow-lg animate-pulse cursor-pointer'
+                            : 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-white font-extrabold ring-2 ring-cyan-400 ring-offset-2 ring-offset-white shadow-lg animate-pulse cursor-pointer';
                         titleText = `Episode ${ep}: Viewing LIVE Scoring Stream! (${item.count || 0} events logged)`;
                     } else if (isViewing) {
-                        badgeStyle = 'bg-emerald-600 border-emerald-700 text-white font-black ring-2 ring-emerald-400 ring-offset-1 shadow-md cursor-pointer';
+                        badgeStyle = isTribal
+                            ? 'bg-emerald-600 border-emerald-500 text-white font-black ring-2 ring-emerald-400 ring-offset-2 ring-offset-[#1a120d] shadow-md cursor-pointer'
+                            : 'bg-emerald-600 border-emerald-700 text-white font-black ring-2 ring-emerald-400 ring-offset-2 ring-offset-white shadow-md cursor-pointer';
                         titleText = ep === 1
                             ? 'Episode 1: Currently Viewing (Click to deselect back to Pre-Season)'
                             : `Episode ${ep}: Currently Viewing (Click to re-select)`;
@@ -270,7 +274,7 @@
                             }
                         },
                         title: titleText,
-                        className: `px-2.5 py-1 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 transition-all duration-150 ${badgeStyle}`
+                        className: `px-2 py-1 rounded-lg border text-xs font-mono font-bold flex items-center gap-1 transition-all duration-150 ${badgeStyle}`
                     },
                         h('span', {}, `E${ep}`),
                         h('span', { className: 'text-[10px] font-black' },

@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="dark">
     <title>Survivor 50 - Chat</title>
     <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
@@ -21,19 +22,42 @@
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#f97316">
+    <meta name="theme-color" content="#0a0604">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Survivor 50">
     
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
     <style>
-        body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-        #root { min-height: 100vh; }
+        html {
+            background-color: #0a0604;
+            color-scheme: dark;
+            min-height: 100%;
+        }
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background-color: #0a0604;
+            min-height: 100%;
+            min-height: 100dvh;
+        }
+        #root { 
+            min-height: 100%; 
+            min-height: 100dvh; 
+        }
         .grey-ombre-bg {
             background: linear-gradient(135deg, #f5f5f5 0%, #9e9e9e 50%, #424242 100%);
             min-height: 100vh;
+            min-height: 100dvh;
+        }
+        /* Safe Area Inset Support */
+        .pt-safe {
+            padding-top: max(1rem, env(safe-area-inset-top, 0px));
+        }
+        .pb-safe {
+            padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
         }
         .chat-container {
             display: flex;
@@ -463,7 +487,7 @@
                     }
                 };
                 
-                return h('div', { className: 'min-h-screen grey-ombre-bg flex items-center justify-center p-4' },
+                return h('div', { className: 'min-h-screen grey-ombre-bg flex items-center justify-center p-4 pt-safe pb-safe' },
                     h('div', { className: 'bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full' },
                         h('div', { className: 'text-center mb-8' },
                             h('h1', { 
@@ -604,7 +628,7 @@
             
             // Main app - episode selection
             if (!selectedEpisode) {
-                return h('div', { className: 'min-h-screen grey-ombre-bg p-4' },
+                return h('div', { className: 'min-h-screen grey-ombre-bg p-4 pt-safe pb-safe' },
                     h('div', { className: 'max-w-4xl mx-auto' },
                         // Header
                         h('div', { className: 'bg-white/95 backdrop-blur-md rounded-2xl p-6 mb-6 shadow-xl' },
@@ -762,7 +786,7 @@
             }
             
             // Chat interface
-            return h('div', { className: 'min-h-screen grey-ombre-bg p-4' },
+            return h('div', { className: 'min-h-screen grey-ombre-bg p-4 pt-safe pb-safe' },
                 h('div', { className: 'max-w-4xl mx-auto' },
                     // Header
                     h('div', { className: 'bg-white/95 backdrop-blur-md rounded-2xl p-4 mb-4 shadow-xl' },

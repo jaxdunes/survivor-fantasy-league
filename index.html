@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="dark">
     <title>Fantasy Survivor League</title>
     <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
@@ -15,10 +16,10 @@
     
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#f97316">
+    <meta name="theme-color" content="#0a0604">
     <link rel="apple-touch-icon" href="icons/icon-192x192.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Fantasy Survivor">
     
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@600;700&family=Permanent+Marker&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
@@ -35,11 +36,34 @@
     };
     </script>
     <style>
-        body { margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-        #root { min-height: 100vh; }
+        html {
+            background-color: #0a0604;
+            color-scheme: dark;
+            min-height: 100%;
+        }
+        body { 
+            margin: 0; 
+            padding: 0; 
+            font-family: system-ui, -apple-system, sans-serif; 
+            background-color: #0a0604;
+            min-height: 100%;
+            min-height: 100dvh;
+        }
+        #root { 
+            min-height: 100%;
+            min-height: 100dvh; 
+        }
         .grey-ombre-bg {
             background: linear-gradient(135deg, #f5f5f5 0%, #9e9e9e 50%, #424242 100%);
             min-height: 100vh;
+            min-height: 100dvh;
+        }
+        /* Safe Area Inset Support */
+        .pt-safe {
+            padding-top: max(1rem, env(safe-area-inset-top, 0px));
+        }
+        .pb-safe {
+            padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
         }
         .modal-backdrop {
             position: fixed;
@@ -940,10 +964,34 @@
         }
 
         function TeamScoreGraph({ leaderboard, scores, eliminationOrder, winner, playerTeams, players, draftState, targetMaxEpisode }) {
-            const { useState, useMemo } = React;
+            const { useState, useMemo, useRef } = React;
             const [chartMode, setChartMode] = useState('cumulative');
             const [hoveredPoint, setHoveredPoint] = useState(null);
             const [hoveredTeamId, setHoveredTeamId] = useState(null);
+            const [selectedTeamId, setSelectedTeamId] = useState(null);
+
+            const lastTeamTouchTimeRef = useRef(0);
+            const touchStartXRef = useRef(0);
+            const touchStartYRef = useRef(0);
+            const isTouchScrollRef = useRef(false);
+            const lastPointTouchTimeRef = useRef(0);
+
+            const activeTeamId = selectedTeamId !== null ? selectedTeamId : hoveredTeamId;
+
+            const handleTeamToggle = (teamId, e) => {
+                if (e && e.stopPropagation) e.stopPropagation();
+                setSelectedTeamId(prev => (prev === teamId ? null : teamId));
+            };
+
+            const handlePointToggle = (pointData, e) => {
+                if (e && e.stopPropagation) e.stopPropagation();
+                setHoveredPoint(prev => {
+                    if (prev && prev.teamId === pointData.teamId && prev.episode === pointData.episode) {
+                        return null;
+                    }
+                    return pointData;
+                });
+            };
 
             const maxEpisode = useMemo(() => {
                 if (targetMaxEpisode !== undefined && targetMaxEpisode !== null && !isNaN(parseInt(targetMaxEpisode))) {
@@ -1096,11 +1144,11 @@
                         }),
                         minY < 0 && h('line', { x1: paddingLeft, y1: getY(0), x2: width - paddingRight, y2: getY(0), stroke: '#f59e0b', strokeWidth: 2, strokeDasharray: '4 4' }),
                         series.map(s => {
-                            const isDimmed = hoveredTeamId && hoveredTeamId !== s.id;
+                            const isDimmed = activeTeamId && activeTeamId !== s.id;
                             const pointsStr = s.history.map((h, i) => `${getX(i)},${getY(h.score)}`).join(' ');
 
                             return h('g', { key: s.id, style: { opacity: isDimmed ? 0.2 : 1, transition: 'opacity 0.2s' } },
-                                h('polyline', { fill: 'none', stroke: s.style.stroke, strokeWidth: hoveredTeamId === s.id ? 5 : 3.5, strokeLinecap: 'round', strokeLinejoin: 'round', points: pointsStr }),
+                                h('polyline', { fill: 'none', stroke: s.style.stroke, strokeWidth: activeTeamId === s.id ? 5 : 3.5, strokeLinecap: 'round', strokeLinejoin: 'round', points: pointsStr }),
                                 s.history.map((pt, i) => {
                                     const cx = getX(i);
                                     const cy = getY(pt.score);
@@ -1121,8 +1169,16 @@
                                             fill: 'transparent',
                                             className: 'cursor-pointer',
                                             onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: pt.episode, score: pt.score, playerBreakdown: pt.playerBreakdown, cx, cy }),
-                                            onTouchStart: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === s.id && hoveredPoint.episode === pt.episode ? null : { teamId: s.id, teamName: s.name, episode: pt.episode, score: pt.score, playerBreakdown: pt.playerBreakdown, cx, cy }); },
-                                            onClick: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === s.id && hoveredPoint.episode === pt.episode ? null : { teamId: s.id, teamName: s.name, episode: pt.episode, score: pt.score, playerBreakdown: pt.playerBreakdown, cx, cy }); },
+                                            onTouchEnd: (e) => {
+                                                e.stopPropagation();
+                                                lastPointTouchTimeRef.current = Date.now();
+                                                handlePointToggle({ teamId: s.id, teamName: s.name, episode: pt.episode, score: pt.score, playerBreakdown: pt.playerBreakdown, cx, cy }, e);
+                                            },
+                                            onClick: (e) => {
+                                                e.stopPropagation();
+                                                if (Date.now() - lastPointTouchTimeRef.current < 450) return;
+                                                handlePointToggle({ teamId: s.id, teamName: s.name, episode: pt.episode, score: pt.score, playerBreakdown: pt.playerBreakdown, cx, cy }, e);
+                                            },
                                             onMouseLeave: () => setHoveredPoint(null)
                                         })
                                     );
@@ -1158,7 +1214,7 @@
                                     const bx = startX + sIdx * barW;
                                     const by = getBarY(gain);
                                     const bh = Math.max(2, paddingTop + plotHeight - by);
-                                    const isDimmed = hoveredTeamId && hoveredTeamId !== s.id;
+                                    const isDimmed = activeTeamId && activeTeamId !== s.id;
 
                                     return h('rect', {
                                         key: s.id,
@@ -1171,8 +1227,16 @@
                                         style: { opacity: isDimmed ? 0.15 : 1, transition: 'opacity 0.2s' },
                                         className: 'transition-all hover:brightness-125 cursor-pointer',
                                         onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: ep, score: `${gain >= 0 ? `+${gain}` : gain} pts in Ep ${ep}`, cx: bx + barW/2, cy: by }),
-                                        onTouchStart: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === s.id && hoveredPoint.episode === ep ? null : { teamId: s.id, teamName: s.name, episode: ep, score: `${gain >= 0 ? `+${gain}` : gain} pts in Ep ${ep}`, cx: bx + barW/2, cy: by }); },
-                                        onClick: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === s.id && hoveredPoint.episode === ep ? null : { teamId: s.id, teamName: s.name, episode: ep, score: `${gain >= 0 ? `+${gain}` : gain} pts in Ep ${ep}`, cx: bx + barW/2, cy: by }); },
+                                        onTouchEnd: (e) => {
+                                            e.stopPropagation();
+                                            lastPointTouchTimeRef.current = Date.now();
+                                            handlePointToggle({ teamId: s.id, teamName: s.name, episode: ep, score: `${gain >= 0 ? `+${gain}` : gain} pts in Ep ${ep}`, cx: bx + barW/2, cy: by }, e);
+                                        },
+                                        onClick: (e) => {
+                                            e.stopPropagation();
+                                            if (Date.now() - lastPointTouchTimeRef.current < 450) return;
+                                            handlePointToggle({ teamId: s.id, teamName: s.name, episode: ep, score: `${gain >= 0 ? `+${gain}` : gain} pts in Ep ${ep}`, cx: bx + barW/2, cy: by }, e);
+                                        },
                                         onMouseLeave: () => setHoveredPoint(null)
                                     });
                                 })
@@ -1194,7 +1258,7 @@
                             );
                         }),
                         series.map(s => {
-                            const isDimmed = hoveredTeamId && hoveredTeamId !== s.id;
+                            const isDimmed = activeTeamId && activeTeamId !== s.id;
                             const rankHistory = episodes.map((ep, epIdx) => {
                                 const epScores = series.map(ts => ({ id: ts.id, score: ts.history[epIdx].score }));
                                 epScores.sort((a, b) => b.score - a.score);
@@ -1204,7 +1268,7 @@
 
                             const pointsStr = rankHistory.map((rh, i) => `${getX(i)},${getRankY(rh.rank)}`).join(' ');
                             return h('g', { key: s.id, style: { opacity: isDimmed ? 0.15 : 1, transition: 'opacity 0.2s' } },
-                                h('polyline', { fill: 'none', stroke: s.style.stroke, strokeWidth: hoveredTeamId === s.id ? 5 : 3.5, strokeLinecap: 'round', strokeLinejoin: 'round', points: pointsStr }),
+                                h('polyline', { fill: 'none', stroke: s.style.stroke, strokeWidth: activeTeamId === s.id ? 5 : 3.5, strokeLinecap: 'round', strokeLinejoin: 'round', points: pointsStr }),
                                 rankHistory.map((rh, i) => {
                                     const cx = getX(i);
                                     const cy = getRankY(rh.rank);
@@ -1224,8 +1288,16 @@
                                             fill: 'transparent',
                                             className: 'cursor-pointer',
                                             onMouseEnter: () => setHoveredPoint({ teamId: s.id, teamName: s.name, episode: rh.episode, score: `Rank #${rh.rank} in Ep ${rh.episode}`, cx, cy }),
-                                            onTouchStart: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === s.id && hoveredPoint.episode === rh.episode ? null : { teamId: s.id, teamName: s.name, episode: rh.episode, score: `Rank #${rh.rank} in Ep ${rh.episode}`, cx, cy }); },
-                                            onClick: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === s.id && hoveredPoint.episode === rh.episode ? null : { teamId: s.id, teamName: s.name, episode: rh.episode, score: `Rank #${rh.rank} in Ep ${rh.episode}`, cx, cy }); },
+                                            onTouchEnd: (e) => {
+                                                e.stopPropagation();
+                                                lastPointTouchTimeRef.current = Date.now();
+                                                handlePointToggle({ teamId: s.id, teamName: s.name, episode: rh.episode, score: `Rank #${rh.rank} in Ep ${rh.episode}`, cx, cy }, e);
+                                            },
+                                            onClick: (e) => {
+                                                e.stopPropagation();
+                                                if (Date.now() - lastPointTouchTimeRef.current < 450) return;
+                                                handlePointToggle({ teamId: s.id, teamName: s.name, episode: rh.episode, score: `Rank #${rh.rank} in Ep ${rh.episode}`, cx, cy }, e);
+                                            },
                                             onMouseLeave: () => setHoveredPoint(null)
                                         })
                                     );
@@ -1345,7 +1417,7 @@
                                 pickFormatted = `${roundNum}.${pickInRound}`;
                             }
 
-                            const isDimmed = hoveredTeamId && hoveredTeamId !== item.teamId;
+                            const isDimmed = activeTeamId && activeTeamId !== item.teamId;
 
                             return h('g', { key: item.id || i, style: { opacity: isDimmed ? 0.15 : 1, transition: 'opacity 0.2s' } },
                                 // Vertical Round Divider Line
@@ -1393,8 +1465,16 @@
                                     rx: 3,
                                     className: 'hover:brightness-125 cursor-pointer transition-all',
                                     onMouseEnter: () => setHoveredPoint({ teamId: item.teamId, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts ${item.isBackfill ? '(Backfilled)' : `(Pick ${pickFormatted})`}`, cx: bx + barW/2, cy: by }),
-                                    onTouchStart: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === item.teamId && hoveredPoint.episode === item.name ? null : { teamId: item.teamId, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts ${item.isBackfill ? '(Backfilled)' : `(Pick ${pickFormatted})`}`, cx: bx + barW/2, cy: by }); },
-                                    onClick: (e) => { e.stopPropagation(); setHoveredPoint(hoveredPoint && hoveredPoint.teamId === item.teamId && hoveredPoint.episode === item.name ? null : { teamId: item.teamId, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts ${item.isBackfill ? '(Backfilled)' : `(Pick ${pickFormatted})`}`, cx: bx + barW/2, cy: by }); },
+                                    onTouchEnd: (e) => {
+                                        e.stopPropagation();
+                                        lastPointTouchTimeRef.current = Date.now();
+                                        handlePointToggle({ teamId: item.teamId, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts ${item.isBackfill ? '(Backfilled)' : `(Pick ${pickFormatted})`}`, cx: bx + barW/2, cy: by }, e);
+                                    },
+                                    onClick: (e) => {
+                                        e.stopPropagation();
+                                        if (Date.now() - lastPointTouchTimeRef.current < 450) return;
+                                        handlePointToggle({ teamId: item.teamId, teamName: item.teamName, episode: item.name, score: `${item.name} (${item.teamName}): ${item.score} pts ${item.isBackfill ? '(Backfilled)' : `(Pick ${pickFormatted})`}`, cx: bx + barW/2, cy: by }, e);
+                                    },
                                     onMouseLeave: () => setHoveredPoint(null)
                                 })
                             );
@@ -1452,22 +1532,75 @@
                 h('div', { className: 'flex flex-col md:flex-row items-stretch md:items-center justify-center gap-4 w-full overflow-visible' },
                     // Team Legend Cards: Flex row wrap on mobile (< md), vertical stack on desktop (>= md)
                     h('div', { className: 'flex flex-row flex-wrap md:flex-col justify-center gap-1.5 md:gap-2 shrink-0 w-full md:w-auto my-auto' },
-                        series.map(s => h('div', {
-                            key: s.id,
-                            onMouseEnter: () => setHoveredTeamId(s.id),
-                            onMouseLeave: () => setHoveredTeamId(null),
-                            onClick: (e) => { e.stopPropagation(); setHoveredTeamId(hoveredTeamId === s.id ? null : s.id); },
-                            onTouchStart: (e) => { e.stopPropagation(); setHoveredTeamId(hoveredTeamId === s.id ? null : s.id); },
-                            className: `flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
-                                hoveredTeamId === s.id ? 'bg-amber-950 border-amber-500/80 scale-105 shadow-md text-amber-200' : 'bg-slate-800/80 border-amber-900/40 text-slate-300 hover:bg-slate-800'
-                            }`
-                        },
-                            h('div', { className: 'flex items-center gap-2 min-w-0' },
-                                h('span', { className: `w-3 h-3 rounded-full shrink-0 ${s.style.bg}` }),
-                                h('span', { className: 'font-bold text-xs truncate' }, s.name)
-                            ),
-                            h('span', { className: 'font-extrabold text-amber-400 text-xs shrink-0 ml-1' }, `${s.currentScore} pts`)
-                        ))
+                        series.map(s => {
+                            const isSelected = selectedTeamId === s.id;
+                            const isHovered = hoveredTeamId === s.id && !selectedTeamId;
+                            const isDimmed = activeTeamId && activeTeamId !== s.id;
+
+                            let buttonClasses = 'flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border transition-all cursor-pointer text-left ';
+                            if (isSelected) {
+                                buttonClasses += 'bg-amber-950 border-amber-400 scale-[1.04] shadow-lg text-amber-200 ring-2 ring-amber-400/80';
+                            } else if (isHovered) {
+                                buttonClasses += 'bg-amber-950/70 border-amber-500/70 scale-[1.02] shadow-md text-amber-200';
+                            } else if (isDimmed) {
+                                buttonClasses += 'bg-slate-800/40 border-slate-800/60 text-slate-400 opacity-60 hover:opacity-90';
+                            } else {
+                                buttonClasses += 'bg-slate-800/80 border-amber-900/40 text-slate-300 hover:bg-slate-800';
+                            }
+
+                            return h('button', {
+                                key: s.id,
+                                type: 'button',
+                                'aria-pressed': isSelected,
+                                title: isSelected ? `${s.name}: Selected (Tap to deselect)` : `${s.name}: Tap to highlight on graph`,
+                                onTouchStart: (e) => {
+                                    if (e.touches && e.touches[0]) {
+                                        touchStartXRef.current = e.touches[0].clientX;
+                                        touchStartYRef.current = e.touches[0].clientY;
+                                        isTouchScrollRef.current = false;
+                                    }
+                                },
+                                onTouchMove: (e) => {
+                                    if (e.touches && e.touches[0]) {
+                                        const dx = Math.abs(e.touches[0].clientX - touchStartXRef.current);
+                                        const dy = Math.abs(e.touches[0].clientY - touchStartYRef.current);
+                                        if (dx > 8 || dy > 8) {
+                                            isTouchScrollRef.current = true;
+                                        }
+                                    }
+                                },
+                                onTouchEnd: (e) => {
+                                    e.stopPropagation();
+                                    lastTeamTouchTimeRef.current = Date.now();
+                                    if (!isTouchScrollRef.current) {
+                                        handleTeamToggle(s.id, e);
+                                    }
+                                },
+                                onClick: (e) => {
+                                    e.stopPropagation();
+                                    if (Date.now() - lastTeamTouchTimeRef.current < 450) {
+                                        return; // Ignore synthetic click from touch gesture
+                                    }
+                                    handleTeamToggle(s.id, e);
+                                },
+                                onMouseEnter: () => {
+                                    if (Date.now() - lastTeamTouchTimeRef.current > 600) {
+                                        setHoveredTeamId(s.id);
+                                    }
+                                },
+                                onMouseLeave: () => setHoveredTeamId(null),
+                                className: buttonClasses
+                            },
+                                h('div', { className: 'flex items-center gap-2 min-w-0' },
+                                    h('span', { className: `w-3 h-3 rounded-full shrink-0 ${s.style.bg} ${isSelected ? 'ring-2 ring-white' : ''}` }),
+                                    h('span', { className: `font-bold text-xs truncate ${isSelected ? 'text-white font-black' : ''}` }, s.name)
+                                ),
+                                h('div', { className: 'flex items-center gap-1.5 shrink-0 ml-1' },
+                                    h('span', { className: `font-extrabold text-xs ${isSelected ? 'text-amber-300' : 'text-amber-400'}` }, `${s.currentScore} pts`),
+                                    isSelected && h('span', { className: 'text-[10px] font-black text-amber-400' }, '✓')
+                                )
+                            );
+                        })
                     ),
 
                     // SVG Graph Container with Horizontal Touch-Scroll for Mobile Viewports
@@ -1877,6 +2010,13 @@
 
             useEffect(() => {
                 document.body.classList.toggle('theme-tribal', theme === 'tribal');
+                const isTribal = theme === 'tribal';
+                document.documentElement.style.backgroundColor = isTribal ? '#0a0604' : '#f5f5f5';
+                document.body.style.backgroundColor = isTribal ? '#0a0604' : '#f5f5f5';
+                const themeMeta = document.querySelector('meta[name="theme-color"]');
+                if (themeMeta) {
+                    themeMeta.setAttribute('content', isTribal ? '#0a0604' : '#f5f5f5');
+                }
             }, [theme]);
             const [selectedAddScoreLeagues, setSelectedAddScoreLeagues] = useState(Object.keys(LEAGUES_DATA));
             const [categorySearchTerm, setCategorySearchTerm] = useState('');
@@ -2586,7 +2726,7 @@
                 }
             };
             
-            return h('div', { className: 'min-h-screen grey-ombre-bg p-4 md:p-8' },
+            return h('div', { className: 'min-h-screen grey-ombre-bg p-4 md:p-8 pt-safe pb-safe' },
                 h('div', { className: 'max-w-7xl mx-auto' },
                     // Header
                     h('div', { className: 'text-center mb-8' },
@@ -3324,7 +3464,7 @@
                     // Floating Side Menu Trigger Tab (Always visible on left edge when closed)
                     !showSideMenu && h('button', {
                         onClick: () => setShowSideMenu(true),
-                        className: 'fixed left-0 top-1/2 -translate-y-1/2 z-40 bg-gradient-to-r from-orange-500 to-amber-600 text-white py-3 px-2 rounded-r-2xl shadow-2xl hover:pr-3.5 transition-all flex items-center gap-2 font-bold text-xs border-y border-r border-white/30 cursor-pointer group',
+                        className: 'fixed left-0 top-[65%] -translate-y-1/2 z-40 bg-gradient-to-r from-orange-500 to-amber-600 text-white py-3 px-2 rounded-r-2xl shadow-2xl hover:pr-3.5 transition-all flex items-center gap-2 font-bold text-xs border-y border-r border-white/30 cursor-pointer group',
                         title: 'Open Leagues Menu'
                     },
                         h(Icons.Menu, { size: 18, className: 'group-hover:scale-110 transition-transform' }),
@@ -3345,7 +3485,7 @@
                                 showSideMenu ? 'translate-x-0' : '-translate-x-full'
                             }`
                         },
-                            h('div', { className: 'p-6' },
+                            h('div', { className: 'p-6 pt-safe pb-safe' },
                                 // Header
                                 h('div', { className: 'flex justify-between items-center mb-6 pb-4 border-b border-slate-800' },
                                     h('div', { className: 'flex items-center gap-2.5' },
