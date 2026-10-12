@@ -150,6 +150,26 @@ function runTests() {
     var cleared = filter.getCatchUpState("season-51");
     assert("clearCatchUpState removes cookie and localStorage", cleared === null && mockLocalStorage["survivor_catchup_season-51"] === undefined);
 
+    // TEST SUITE 8: Pre-Season / Unseen Episode 1 State ("I have not seen any episodes!")
+    var unseenChoice = {
+        maxWatchedEpisode: 0,
+        viewingEpisode: 0,
+        latestScoredEpisodeAtChoice: 5,
+        isLiveStreaming: false
+    };
+    filter.setCatchUpState("season-51", unseenChoice);
+    var savedUnseen = filter.getCatchUpState("season-51");
+    assert("Ep 0 state saved and preserved as 0 (not coerced to 1)", savedUnseen && savedUnseen.maxWatchedEpisode === 0 && savedUnseen.viewingEpisode === 0);
+
+    var evalUnseen = filter.evaluateCatchUpStatus("season-51", 5, null, [1, 2, 3, 4, 5]);
+    assert("evaluateCatchUpStatus preserves viewingEpisode as 0", evalUnseen.viewingEpisode === 0);
+    assert("evaluateCatchUpStatus preserves maxWatchedEpisode as 0", evalUnseen.maxWatchedEpisode === 0);
+
+    // Stale check for user on Ep 0 when Ep 6 airs
+    var evalUnseenStale = filter.evaluateCatchUpStatus("season-51", 6, null, [1, 2, 3, 4, 5, 6]);
+    assert("New episode aired triggers needsModal for Ep 0 user", evalUnseenStale.needsModal === true && evalUnseenStale.isStale === true);
+    assert("Ep 0 user remains safely frozen at 0 when Ep 6 airs", evalUnseenStale.viewingEpisode === 0);
+
     return {
         passed: passed,
         failed: failed,

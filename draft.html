@@ -906,17 +906,17 @@
             }, [scores, eliminationOrder, scoredEpisodes]);
 
             const viewingEpisode = useMemo(() => {
-                if (isFinishedSeason) {
-                    return catchUpState?.viewingEpisode || episodeMeta.latestScoredEpisode || 14;
-                }
-                if (catchUpState && catchUpState.viewingEpisode) {
+                if (catchUpState && catchUpState.viewingEpisode !== undefined && catchUpState.viewingEpisode !== null) {
                     return catchUpState.viewingEpisode;
+                }
+                if (isFinishedSeason) {
+                    return episodeMeta.latestScoredEpisode || 14;
                 }
                 return episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
             }, [catchUpState, episodeMeta, isFinishedSeason]);
 
             const maxWatchedEpisode = useMemo(() => {
-                if (catchUpState && catchUpState.maxWatchedEpisode) {
+                if (catchUpState && catchUpState.maxWatchedEpisode !== undefined && catchUpState.maxWatchedEpisode !== null) {
                     return catchUpState.maxWatchedEpisode;
                 }
                 return episodeMeta.latestScoredEpisode || 1;

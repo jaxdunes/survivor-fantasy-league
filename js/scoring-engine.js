@@ -204,7 +204,7 @@ const PRIMARY_COLOR_PALETTES = {
  */
 function getTribeForEpisode(player, episodeNumber = 1) {
     if (!player) return 'Unassigned';
-    const targetEp = parseInt(episodeNumber) || 1;
+    const targetEp = (episodeNumber !== undefined && episodeNumber !== null && !isNaN(parseInt(episodeNumber))) ? parseInt(episodeNumber) : 1;
 
     if (player.tribeHistory && Array.isArray(player.tribeHistory) && player.tribeHistory.length > 0) {
         const sortedHistory = [...player.tribeHistory].sort((a, b) => (parseInt(a.episode) || 1) - (parseInt(b.episode) || 1));
@@ -317,7 +317,8 @@ function getTribeDotColor(tribeName = '', customTribes = []) {
  */
 function filterScoresByEpisode(scores = {}, targetEpisode = 14, allowInProgress = true) {
     if (!scores || typeof scores !== 'object') return {};
-    const maxEp = parseInt(targetEpisode) || 14;
+    const maxEp = (targetEpisode !== undefined && targetEpisode !== null && !isNaN(parseInt(targetEpisode))) ? parseInt(targetEpisode) : 14;
+    if (maxEp <= 0) return {};
     const filtered = {};
 
     Object.entries(scores).forEach(([playerId, playerEpisodes]) => {
@@ -350,7 +351,8 @@ function filterScoresByEpisode(scores = {}, targetEpisode = 14, allowInProgress 
  */
 function filterEliminationsByEpisode(eliminationOrder = {}, targetEpisode = 14) {
     if (!eliminationOrder || typeof eliminationOrder !== 'object') return {};
-    const maxEp = parseInt(targetEpisode) || 14;
+    const maxEp = (targetEpisode !== undefined && targetEpisode !== null && !isNaN(parseInt(targetEpisode))) ? parseInt(targetEpisode) : 14;
+    if (maxEp <= 0) return {};
     const filtered = {};
 
     Object.entries(eliminationOrder).forEach(([playerId, elimEp]) => {
@@ -372,8 +374,9 @@ function filterEliminationsByEpisode(eliminationOrder = {}, targetEpisode = 14) 
  */
 function filterWinnerByEpisode(winner, targetEpisode = 14, finaleEpisode = 14) {
     if (!winner) return null;
-    const currentEp = parseInt(targetEpisode) || 14;
-    const finale = parseInt(finaleEpisode) || 14;
+    const currentEp = (targetEpisode !== undefined && targetEpisode !== null && !isNaN(parseInt(targetEpisode))) ? parseInt(targetEpisode) : 14;
+    const finale = (finaleEpisode !== undefined && finaleEpisode !== null && !isNaN(parseInt(finaleEpisode))) ? parseInt(finaleEpisode) : 14;
+    if (currentEp <= 0) return null;
     return currentEp >= finale ? winner : null;
 }
 
@@ -390,7 +393,8 @@ function isContestantAliveAsOfEpisode(playerId, eliminationOrder = {}, targetEpi
     if (elimEp === undefined || elimEp === null || elimEp === '') return true;
     const ep = parseInt(elimEp);
     if (isNaN(ep)) return true;
-    return ep > (parseInt(targetEpisode) || 14);
+    const maxEp = (targetEpisode !== undefined && targetEpisode !== null && !isNaN(parseInt(targetEpisode))) ? parseInt(targetEpisode) : 14;
+    return ep > maxEp;
 }
 
 /**

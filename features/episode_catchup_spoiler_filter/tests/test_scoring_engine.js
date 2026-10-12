@@ -92,7 +92,29 @@ assert(statuses.statuses[3].status === 'unscored' && statuses.statuses[3].isSele
 assert(statuses.inProgressEpisode === 3, 'Identified in-progress episode is 3');
 assert(statuses.latestScoredEpisode === 3, 'Latest scored episode is 3');
 
+// TEST SET 5: Episode 0 / Pre-Season State (No episodes seen)
+var ep0Scores = filterScoresByEpisode(mockScores, 0);
+assert(Object.keys(ep0Scores).length === 0, 'Ep 0 scores are completely empty (0 points for all)');
+
+var ep0Elims = filterEliminationsByEpisode(mockEliminations, 0);
+assert(Object.keys(ep0Elims).length === 0, 'Ep 0 eliminations are completely empty (all contestants alive)');
+
+assert(isContestantAliveAsOfEpisode('player-1', mockEliminations, 0) === true, 'Player-1 alive in Pre-Season');
+assert(isContestantAliveAsOfEpisode('player-2', mockEliminations, 0) === true, 'Player-2 alive in Pre-Season (even though eliminated Ep 2)');
+assert(filterWinnerByEpisode('player-1', 0, 14) === null, 'Winner bonus masked in Pre-Season');
+
+var playerWithSwap = {
+    startingTribe: 'Cila',
+    tribe: 'Merge Tribe',
+    tribeHistory: [
+        { episode: 1, tribe: 'Cila' },
+        { episode: 3, tribe: 'Merge Tribe' }
+    ]
+};
+assert(getTribeForEpisode(playerWithSwap, 0) === 'Cila', 'Ep 0 resolves to starting tribe');
+
 console.log('\n📊 RESULTS: ' + passed + ' passed, ' + failed + ' failed.');
 if (failed > 0) {
     throw new Error('Some tests failed!');
 }
+

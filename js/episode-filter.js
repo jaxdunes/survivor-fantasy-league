@@ -43,10 +43,14 @@
 
     function setCatchUpState(seasonId = 'season-51', state = {}) {
         const key = `survivor_catchup_${seasonId}`;
+        const parsedMax = parseInt(state.maxWatchedEpisode);
+        const parsedViewing = parseInt(state.viewingEpisode);
+        const parsedLatest = parseInt(state.latestScoredEpisodeAtChoice);
+
         const payload = {
-            maxWatchedEpisode: parseInt(state.maxWatchedEpisode) || 1,
-            viewingEpisode: parseInt(state.viewingEpisode) || 1,
-            latestScoredEpisodeAtChoice: parseInt(state.latestScoredEpisodeAtChoice) || 1,
+            maxWatchedEpisode: !isNaN(parsedMax) ? parsedMax : 1,
+            viewingEpisode: !isNaN(parsedViewing) ? parsedViewing : 1,
+            latestScoredEpisodeAtChoice: !isNaN(parsedLatest) ? parsedLatest : 1,
             isLiveStreaming: Boolean(state.isLiveStreaming),
             updatedAt: Date.now()
         };
@@ -125,26 +129,36 @@
         // If a new episode has aired/started scoring since the user's choice:
         // Hold them safely at their last confirmed watched episode and trigger modal
         if (maxAvailable > (saved.latestScoredEpisodeAtChoice || 0)) {
-            const safeEp = saved.viewingEpisode || saved.maxWatchedEpisode || 1;
+            const safeEp = (saved.viewingEpisode !== undefined && saved.viewingEpisode !== null)
+                ? saved.viewingEpisode
+                : ((saved.maxWatchedEpisode !== undefined && saved.maxWatchedEpisode !== null) ? saved.maxWatchedEpisode : 1);
+            const safeMaxWatched = (saved.maxWatchedEpisode !== undefined && saved.maxWatchedEpisode !== null)
+                ? saved.maxWatchedEpisode
+                : 1;
             return {
                 needsModal: true,
                 isStale: true,
                 initialEp: safeEp,
                 viewingEpisode: safeEp,
-                maxWatchedEp: saved.maxWatchedEpisode || 1,
-                maxWatchedEpisode: saved.maxWatchedEpisode || 1
+                maxWatchedEp: safeMaxWatched,
+                maxWatchedEpisode: safeMaxWatched
             };
         }
 
         // Existing up-to-date preference
-        const safeView = saved.viewingEpisode || saved.maxWatchedEpisode || maxAvailable;
+        const safeView = (saved.viewingEpisode !== undefined && saved.viewingEpisode !== null)
+            ? saved.viewingEpisode
+            : ((saved.maxWatchedEpisode !== undefined && saved.maxWatchedEpisode !== null) ? saved.maxWatchedEpisode : maxAvailable);
+        const safeMax = (saved.maxWatchedEpisode !== undefined && saved.maxWatchedEpisode !== null)
+            ? saved.maxWatchedEpisode
+            : 1;
         return {
             needsModal: false,
             isStale: false,
             initialEp: Math.min(safeView, maxAvailable),
             viewingEpisode: Math.min(safeView, maxAvailable),
-            maxWatchedEp: Math.min(saved.maxWatchedEpisode || 1, maxAvailable),
-            maxWatchedEpisode: Math.min(saved.maxWatchedEpisode || 1, maxAvailable)
+            maxWatchedEp: Math.min(safeMax, maxAvailable),
+            maxWatchedEpisode: Math.min(safeMax, maxAvailable)
         };
     }
 
@@ -163,8 +177,8 @@
     }) {
         if (!h) return null;
         const isTribal = theme === 'tribal';
-        const viewingEpNum = parseInt(viewingEpisode) || 1;
-        const maxWatchedNum = parseInt(maxWatchedEpisode) || 1;
+        const viewingEpNum = (viewingEpisode !== undefined && viewingEpisode !== null && !isNaN(parseInt(viewingEpisode))) ? parseInt(viewingEpisode) : 1;
+        const maxWatchedNum = (maxWatchedEpisode !== undefined && maxWatchedEpisode !== null && !isNaN(parseInt(maxWatchedEpisode))) ? parseInt(maxWatchedEpisode) : 1;
 
         return h('div', {
             className: 'bg-white/95 backdrop-blur-md rounded-2xl p-4 mb-6 shadow-xl border border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4'
@@ -176,7 +190,7 @@
                     h('span', { className: 'text-xs font-black uppercase tracking-wider text-gray-800 font-mono' }, 'Episodes Scored:'),
                     h('span', {
                         className: 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-mono'
-                    }, `Viewing: Ep ${viewingEpNum}`)
+                    }, viewingEpNum === 0 ? 'Viewing: Pre-Season' : `Viewing: Ep ${viewingEpNum}`)
                 ),
                 h('div', { className: 'hidden sm:flex items-center gap-2 text-[10px] font-bold text-gray-500 border-l border-gray-200 pl-3' },
                     h('span', { className: 'flex items-center gap-1' },
@@ -196,6 +210,30 @@
 
             // Episode Badges
             h('div', { className: 'flex flex-wrap items-center gap-1.5 w-full md:w-auto overflow-x-auto py-1' },
+                // Pre-Season / Ep 0 Pill
+                (() => {
+                    const isViewing = viewingEpNum === 0;
+                    let badgeStyle = isViewing
+                        ? 'bg-amber-600 border-amber-700 text-white font-black ring-2 ring-amber-400 ring-offset-1 shadow-md cursor-pointer'
+                        : (isTribal
+                            ? 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 cursor-pointer shadow-xs'
+                            : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200 cursor-pointer shadow-xs');
+                    return h('button', {
+                        key: 'ep-0',
+                        type: 'button',
+                        id: 'tracker-ep-0-btn',
+                        onClick: () => {
+                            if (typeof onSelectEpisode === 'function') {
+                                onSelectEpisode(0, false);
+                            }
+                        },
+                        title: 'Pre-Season: View site with no scores, as if the season had not started yet',
+                        className: `px-2.5 py-1 rounded-lg border text-xs font-mono font-bold flex items-center gap-1 transition-all duration-150 ${badgeStyle}`
+                    },
+                        h('span', {}, 'Pre'),
+                        h('span', { className: 'text-[10px] font-black' }, '🏝️')
+                    );
+                })(),
                 episodeStatuses.map(item => {
                     const ep = item.ep;
                     const isViewing = ep === viewingEpNum;
@@ -339,7 +377,21 @@
                         )
                         : h('div', { className: 'text-xs text-gray-400 italic text-center py-2' },
                             'No earlier episodes scored yet.'
-                        )
+                        ),
+
+                    // Option 3: "I have not seen any episodes!" (Pre-Season state)
+                    h('div', { className: 'mt-5 pt-3 text-center border-t border-gray-100' },
+                        h('button', {
+                            type: 'button',
+                            id: 'catchup-no-episodes-btn',
+                            onClick: () => {
+                                if (typeof onSelectPastEpisode === 'function') {
+                                    onSelectPastEpisode(0);
+                                }
+                            },
+                            className: 'text-xs text-gray-500 hover:text-orange-600 underline font-semibold transition cursor-pointer hover:font-bold'
+                        }, "I have not seen any episodes!")
+                    )
                 )
             )
         );
@@ -409,13 +461,17 @@
         const isLiveInProgress = Boolean(inProgressEpisode);
 
         if (viewingEpisode >= liveEp) return null;
+        const isPreSeason = viewingEpisode === 0;
 
         return h('div', {
             className: 'bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5 mb-6 flex flex-wrap items-center justify-between gap-3 text-amber-900 shadow-xs'
         },
             h('div', { className: 'flex items-center gap-2 text-xs md:text-sm font-bold' },
-                h('span', { className: 'text-base' }, '⏳'),
-                h('span', {}, `Historical View: Displaying state as of Episode ${viewingEpisode}. Future episodes and eliminations are masked.`)
+                h('span', { className: 'text-base' }, isPreSeason ? '🏝️' : '⏳'),
+                h('span', {}, isPreSeason
+                    ? 'Historical View: Displaying Pre-Season state (Before Episode 1). No scores or eliminations have occurred yet.'
+                    : `Historical View: Displaying state as of Episode ${viewingEpisode}. Future episodes and eliminations are masked.`
+                )
             ),
             h('button', {
                 type: 'button',
@@ -457,7 +513,9 @@
             },
                 h('span', { className: 'text-xl' }, '⚠️'),
                 h('div', { className: 'text-xs md:text-sm font-bold' },
-                    `Spoiler Advisory: You are viewing Episode ${viewingEpisode}. Live chat messages may discuss events from later episodes.`
+                    viewingEpisode === 0
+                        ? 'Spoiler Advisory: You are viewing Survivor as of Pre-Season (Before Episode 1). Live chat messages discuss aired episodes!'
+                        : `Spoiler Advisory: You are viewing Episode ${viewingEpisode}. Live chat messages may discuss events from later episodes.`
                 )
             );
         }

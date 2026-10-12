@@ -41,6 +41,10 @@ When a user visits the site during an **active season** (e.g. `Season 51: Open E
    - **Secondary Selector ("Catch-Up Box")**:
      - Lists all scored episodes prior to the latest episode (e.g. `Episode 1`, `Episode 2`...).
      - Allows users behind on episodes to pick their safe checkpoint.
+   - **Pre-Season Option ("I have not seen any episodes!")**:
+     - Rendered in small text below the episode selector: `"I have not seen any episodes!"`.
+     - Clicking this option sets the state to `viewingEpisode: 0` (Pre-Season state).
+     - Renders the site completely free of scores (0 points for all teams and contestants), all contestants alive with starting tribes, all torches lit, and graph displaying Pre-Season prior to Episode 1, as if the season had not started yet.
 3. **Cookie / Invalidation Rule**:
    - Stored in a browser cookie (and mirrored in `localStorage`) keyed by season: `survivor_catchup_${seasonId}`.
    - **Automatic Invalidation on New Score**: When commissioner scores a new episode (e.g. Episode X+1), the browser detects that `latestScoredEpisode > savedState.latestScoredAtChoice`. The cookie is marked expired, forcing the safe modal to appear again so the user is never accidentally spoiled on the new episode!

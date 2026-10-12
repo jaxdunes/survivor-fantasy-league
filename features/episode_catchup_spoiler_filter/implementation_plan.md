@@ -97,17 +97,18 @@ To support universal episode selection across **all pages** (`index.html`, `draf
 
 | ID | Test Scenario | Expected Outcome | Status |
 | :--- | :--- | :--- | :--- |
-| **TC-1.1** | User views Episode 1 | Ep 2 & 3 points excluded; contestants eliminated in Ep 2 & 3 show **ALIVE** with lit torches. | Pending |
-| **TC-1.2** | User views Episode 2 | Ep 2 points included; Ep 3 points excluded; Ep 3 eliminated contestant shows **ALIVE**. | Pending |
-| **TC-1.3** | User views In-Progress Ep 3 | Enters Live Scoring Mode; Ep 3 scores stream in real-time as admin enters them; tracker shows pulsing `⚪ LIVE`. | Pending |
-| **TC-1.4** | Live point entered while on Ep 2 | Admin adds point to Ep 3 in Firebase; user on Ep 2 sees Ep 3 tracker badge update to `⚪ (N+1)`, but team scores do NOT change (no spoiler leak). | Pending |
-| **TC-2.1** | First visit to active season (no cookie) | Catch-Up Entrance Modal blocks view until user selects "I'm Live!" or an earlier episode. | Pending |
-| **TC-2.2** | Select "I'm Live!" when Ep 3 in progress | Site renders Ep 3 live streaming mode; cookie updated to Ep 3. | Pending |
-| **TC-3.1** | Return visit when Ep 4 starts being scored | Safe freeze holds view at prior watched episode (e.g. Ep 2); modal triggers to offer Ep 4. | Pending |
-| **TC-4.1** | Scrubbing backward (Ep 3 down to Ep 1) | Instant switch to Ep 1 state; no confirmation dialog required; tracker highlights Ep 1. | Pending |
-| **TC-4.2** | Scrubbing forward (Ep 1 up to Ep 2) | Spoiler warning modal appears: *"Confirm Episode 2?"*; clicking Cancel retains Ep 1. | Pending |
-| **TC-5.1** | Non-selectable future episodes | Unscored episodes (e.g. Ep 5..14) are disabled and cannot be clicked. | Pending |
-| **TC-6.1** | Cross-Page State: `index.html` to `draft.html` | Changing episode to Ep 1 on `index.html` persists when navigating to `draft.html`; draft displays Ep 1 state. | Pending |
-| **TC-6.2** | Draft Board Backfill Masking | Player backfilled in Ep 3 appears unassigned when viewing Ep 1 or 2 on `draft.html`. | Pending |
-| **TC-7.1** | Chat Spoiler Advisory Banner | When viewing Ep 1, `chat.html` renders yellow warning banner alerting user of potential spoilers in chat. | Pending |
-| **TC-7.2** | Chat Live Scoring Banner | When viewing in-progress Ep 3, `chat.html` renders live scoring banner. | Pending |
+| **TC-1.1** | User views Episode 1 | Ep 2 & 3 points excluded; contestants eliminated in Ep 2 & 3 show **ALIVE** with lit torches. | Passed |
+| **TC-1.2** | User views Episode 2 | Ep 2 points included; Ep 3 points excluded; Ep 3 eliminated contestant shows **ALIVE**. | Passed |
+| **TC-1.3** | User views In-Progress Ep 3 | Enters Live Scoring Mode; Ep 3 scores stream in real-time as admin enters them; tracker shows pulsing `⚪ LIVE`. | Passed |
+| **TC-1.4** | Live point entered while on Ep 2 | Admin adds point to Ep 3 in Firebase; user on Ep 2 sees Ep 3 tracker badge update to `⚪ (N+1)`, but team scores do NOT change (no spoiler leak). | Passed |
+| **TC-1.5** | User clicks "I have not seen any episodes!" | Viewing set to Ep 0; all team scores 0; all contestants alive; torches lit; graph shows Pre-Season prior to Ep 1. | Passed |
+| **TC-2.1** | First visit to active season (no cookie) | Catch-Up Entrance Modal blocks view until user selects "I'm Live!" or an earlier episode. | Passed |
+| **TC-2.2** | Select "I'm Live!" when Ep 3 in progress | Site renders Ep 3 live streaming mode; cookie updated to Ep 3. | Passed |
+| **TC-3.1** | Return visit when Ep 4 starts being scored | Safe freeze holds view at prior watched episode (e.g. Ep 2); modal triggers to offer Ep 4. | Passed |
+| **TC-4.1** | Scrubbing backward (Ep 3 down to Ep 1) | Instant switch to Ep 1 state; no confirmation dialog required; tracker highlights Ep 1. | Passed |
+| **TC-4.2** | Scrubbing forward (Ep 1 up to Ep 2) | Spoiler warning modal appears: *"Confirm Episode 2?"*; clicking Cancel retains Ep 1. | Passed |
+| **TC-5.1** | Non-selectable future episodes | Unscored episodes (e.g. Ep 5..14) are disabled and cannot be clicked. | Passed |
+| **TC-6.1** | Cross-Page State: `index.html` to `draft.html` | Changing episode to Ep 1 on `index.html` persists when navigating to `draft.html`; draft displays Ep 1 state. | Passed |
+| **TC-6.2** | Draft Board Backfill Masking | Player backfilled in Ep 3 appears unassigned when viewing Ep 1 or 2 on `draft.html`. | Passed |
+| **TC-7.1** | Chat Spoiler Advisory Banner | When viewing Ep 1, `chat.html` renders yellow warning banner alerting user of potential spoilers in chat. | Passed |
+| **TC-7.2** | Chat Live Scoring Banner | When viewing in-progress Ep 3, `chat.html` renders live scoring banner. | Passed |

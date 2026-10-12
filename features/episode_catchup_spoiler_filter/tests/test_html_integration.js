@@ -59,6 +59,12 @@ function runTests() {
     var configJs = app.read(repoPath + "/js/config.js");
     assert("config.js isolates localhost under dev_testing/", configJs.indexOf("dev_testing/") !== -1);
 
+    // TEST SUITE 5: Pre-Season / Unseen Episode 1 UI Contract
+    var filterJs = app.read(repoPath + "/js/episode-filter.js");
+    assert("CatchUpEntranceModal includes 'I have not seen any episodes!' button", filterJs.indexOf('catchup-no-episodes-btn') !== -1 && filterJs.indexOf('I have not seen any episodes!') !== -1);
+    assert("UniversalEpisodeTracker includes Pre-Season pill", filterJs.indexOf('tracker-ep-0-btn') !== -1 && filterJs.indexOf('Viewing: Pre-Season') !== -1);
+    assert("TeamScoreGraph displays Pre-Season message when maxEpisode === 0", indexHtml.indexOf('Prior to Episode 1') !== -1);
+
     return {
         passed: passed,
         failed: failed,
