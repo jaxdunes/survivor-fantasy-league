@@ -2182,10 +2182,10 @@
 
             const handleSelectEpisode = (ep, isInProgress) => {
                 const epNum = parseInt(ep);
-                if (epNum <= maxWatchedEpisode) {
+                if (epNum <= maxWatchedEpisode || epNum <= 1) {
                     const liveEp = episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
                     const newState = {
-                        maxWatchedEpisode: maxWatchedEpisode,
+                        maxWatchedEpisode: Math.max(maxWatchedEpisode, epNum),
                         viewingEpisode: epNum,
                         latestScoredEpisodeAtChoice: liveEp,
                         isLiveStreaming: isInProgress && epNum === episodeMeta.inProgressEpisode
@@ -2203,7 +2203,7 @@
             const handleConfirmJumpToLive = () => {
                 const liveEp = episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
                 const isInProgress = Boolean(episodeMeta.inProgressEpisode);
-                if (liveEp > maxWatchedEpisode) {
+                if (liveEp > maxWatchedEpisode && liveEp > 1) {
                     setPendingConfirmEpisode(liveEp);
                     setPendingIsInProgress(isInProgress);
                 } else {

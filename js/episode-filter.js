@@ -218,49 +218,24 @@
 
             // Episode Badges
             h('div', { className: 'flex flex-wrap items-center gap-1.5 w-full md:w-auto overflow-x-auto py-1' },
-                // Pre-Season / Ep 0 Pill
-                (() => {
-                    const isViewing = viewingEpNum === 0;
-                    let badgeStyle = isViewing
-                        ? 'bg-amber-600 border-amber-700 text-white font-black ring-2 ring-amber-400 ring-offset-1 shadow-md cursor-pointer'
-                        : (isTribal
-                            ? 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 cursor-pointer shadow-xs'
-                            : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200 cursor-pointer shadow-xs');
-                    return h('button', {
-                        key: 'ep-0',
-                        type: 'button',
-                        id: 'tracker-ep-0-btn',
-                        onClick: () => {
-                            if (typeof onSelectEpisode === 'function') {
-                                onSelectEpisode(0, false);
-                            }
-                        },
-                        title: 'Pre-Season: View site with no scores, as if the season had not started yet',
-                        className: `px-2.5 py-1 rounded-lg border text-xs font-mono font-bold flex items-center gap-1 transition-all duration-150 ${badgeStyle}`
-                    },
-                        h('span', {}, 'Pre'),
-                        h('span', { className: 'text-[10px] font-black' }, '🏝️')
-                    );
-                })(),
                 episodeStatuses.map(item => {
                     const ep = item.ep;
                     const isViewing = ep === viewingEpNum;
-                    const isLit = ep <= viewingEpNum;
+                    const isLit = ep <= viewingEpNum && viewingEpNum > 0;
                     const isInProgress = item.status === 'in-progress' || ep === inProgressEpisode;
-                    const isSelectable = item.isSelectable;
+                    const isSelectable = item.isSelectable || isViewing || (ep === 1 && latestScoredEpisode <= 1);
 
                     let badgeStyle = '';
                     let titleText = `Episode ${ep}: ${item.label}`;
 
-                    if (!isSelectable) {
-                        badgeStyle = 'bg-gray-100/70 border-gray-200 text-gray-400 cursor-not-allowed opacity-50';
-                        titleText += ' (Not yet aired or scored)';
-                    } else if (isViewing && isInProgress) {
+                    if (isViewing && isInProgress) {
                         badgeStyle = 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-white font-extrabold ring-2 ring-cyan-400 ring-offset-1 shadow-lg animate-pulse cursor-pointer';
                         titleText = `Episode ${ep}: Viewing LIVE Scoring Stream! (${item.count || 0} events logged)`;
                     } else if (isViewing) {
                         badgeStyle = 'bg-emerald-600 border-emerald-700 text-white font-black ring-2 ring-emerald-400 ring-offset-1 shadow-md cursor-pointer';
-                        titleText = `Episode ${ep}: Currently Viewing (Click to re-select)`;
+                        titleText = ep === 1
+                            ? 'Episode 1: Currently Viewing (Click to deselect back to Pre-Season)'
+                            : `Episode ${ep}: Currently Viewing (Click to re-select)`;
                     } else if (isLit) {
                         badgeStyle = isTribal
                             ? 'bg-emerald-950/80 border-emerald-500/70 text-emerald-300 hover:bg-emerald-900 cursor-pointer shadow-xs'
@@ -269,21 +244,29 @@
                     } else if (isInProgress) {
                         badgeStyle = 'bg-cyan-50 border-cyan-400 text-cyan-800 hover:bg-cyan-100 cursor-pointer shadow-xs animate-pulse';
                         titleText = `Episode ${ep}: Currently Being Scored Live! (Click to watch live stream)`;
-                    } else if (ep <= latestScoredEpisode) {
+                    } else if (ep <= latestScoredEpisode || (ep === 1 && isSelectable)) {
                         // Available but unwatched
-                        badgeStyle = 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200 cursor-pointer shadow-xs';
-                        titleText = `Episode ${ep}: Available (Click to reveal)`;
+                        badgeStyle = isTribal
+                            ? 'bg-slate-900 border-slate-700 text-slate-300 hover:bg-slate-800 cursor-pointer shadow-xs'
+                            : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200 cursor-pointer shadow-xs';
+                        titleText = `Episode ${ep}: Available (Click to view)`;
                     } else {
-                        badgeStyle = 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed opacity-60';
+                        badgeStyle = 'bg-gray-100/70 border-gray-200 text-gray-400 cursor-not-allowed opacity-50';
+                        titleText += ' (Not yet aired or scored)';
                     }
 
                     return h('button', {
                         key: ep,
                         type: 'button',
+                        id: `tracker-ep-${ep}-btn`,
                         disabled: !isSelectable,
                         onClick: () => {
                             if (isSelectable && typeof onSelectEpisode === 'function') {
-                                onSelectEpisode(ep, isInProgress);
+                                if (ep === 1 && isViewing) {
+                                    onSelectEpisode(0, false);
+                                } else {
+                                    onSelectEpisode(ep, isInProgress);
+                                }
                             }
                         },
                         title: titleText,
