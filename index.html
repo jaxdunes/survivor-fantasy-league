@@ -959,16 +959,6 @@
                 return Math.max(maxEp, 1);
             }, [scores, targetMaxEpisode]);
 
-            if (maxEpisode === 0) {
-                return h('div', { className: 'bg-white rounded-2xl p-6 shadow-xl border border-gray-100 mb-8 text-center' },
-                    h('div', { className: 'py-8' },
-                        h('div', { className: 'text-4xl mb-3' }, '🏝️'),
-                        h('h3', { className: 'text-xl font-black text-gray-800 uppercase tracking-wide', style: { fontFamily: '"Bebas Neue", cursive' } }, 'Pre-Season • Prior to Episode 1'),
-                        h('p', { className: 'text-sm text-gray-500 font-semibold max-w-md mx-auto mt-1' }, 'No points or eliminations have been scored yet. All fantasy teams are currently tied at 0 points.')
-                    )
-                );
-            }
-
             const episodes = useMemo(() => {
                 const arr = [];
                 for (let i = 1; i <= maxEpisode; i++) arr.push(i);
@@ -1054,6 +1044,16 @@
 
                 return { series: teamSeries, minScoreVal: minVal, maxScoreVal: maxVal };
             }, [leaderboard, scores, episodes, eliminationOrder, winner, playerTeams, players, draftState]);
+
+            if (maxEpisode === 0) {
+                return h('div', { className: 'bg-white rounded-2xl p-6 shadow-xl border border-gray-100 mb-8 text-center' },
+                    h('div', { className: 'py-8' },
+                        h('div', { className: 'text-4xl mb-3' }, '🏝️'),
+                        h('h3', { className: 'text-xl font-black text-gray-800 uppercase tracking-wide', style: { fontFamily: '"Bebas Neue", cursive' } }, 'Pre-Season • Prior to Episode 1'),
+                        h('p', { className: 'text-sm text-gray-500 font-semibold max-w-md mx-auto mt-1' }, 'No points or eliminations have been scored yet. All fantasy teams are currently tied at 0 points.')
+                    )
+                );
+            }
 
             const width = 800;
             const height = 300;
