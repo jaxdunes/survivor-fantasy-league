@@ -425,6 +425,7 @@
     <!-- Modular Application JS Scripts -->
     <script src="js/config.js"></script>
     <script src="js/scoring-engine.js"></script>
+    <script src="js/episode-filter.js"></script>
     <script src="js/api.js"></script>
     
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -938,13 +939,14 @@
             );
         }
 
-        function TeamScoreGraph({ leaderboard, scores, eliminationOrder, winner, playerTeams, players, draftState }) {
+        function TeamScoreGraph({ leaderboard, scores, eliminationOrder, winner, playerTeams, players, draftState, targetMaxEpisode }) {
             const { useState, useMemo } = React;
             const [chartMode, setChartMode] = useState('cumulative');
             const [hoveredPoint, setHoveredPoint] = useState(null);
             const [hoveredTeamId, setHoveredTeamId] = useState(null);
 
             const maxEpisode = useMemo(() => {
+                if (targetMaxEpisode) return Math.max(1, parseInt(targetMaxEpisode));
                 let maxEp = 1;
                 Object.values(scores || {}).forEach(playerScores => {
                     Object.keys(playerScores || {}).forEach(ep => {
@@ -953,7 +955,7 @@
                     });
                 });
                 return Math.max(maxEp, 1);
-            }, [scores]);
+            }, [scores, targetMaxEpisode]);
 
             const episodes = useMemo(() => {
                 const arr = [];
@@ -1830,6 +1832,12 @@
             const [winner, setWinner] = useState(null); // Single winner ID
             const [currentEpisode, setCurrentEpisode] = useState(1);
             const [lastSelectedEpisode, setLastSelectedEpisode] = useState(() => localStorage.getItem('survivor_last_selected_episode') || '1');
+            const [catchUpState, setCatchUpStateLocal] = useState(() => {
+                return window.SurvivorEpisodeFilter ? window.SurvivorEpisodeFilter.getCatchUpState(activeSeasonId) : null;
+            });
+            const [showCatchUpModal, setShowCatchUpModal] = useState(false);
+            const [pendingConfirmEpisode, setPendingConfirmEpisode] = useState(null);
+            const [pendingIsInProgress, setPendingIsInProgress] = useState(false);
             const [showRules, setShowRules] = useState(false);
             const [showAddScore, setShowAddScore] = useState(false);
             const [showMarkElimination, setShowMarkElimination] = useState(false);
@@ -2074,6 +2082,123 @@
                 };
             }, [activeLeagueId, activeSeasonId]);
             
+            const isFinishedSeason = (seasonData && seasonData.status === 'finished') || (seasonConfig && seasonConfig.status === 'previous') || activeSeasonId === 'season-50';
+
+            const episodeMeta = useMemo(() => {
+                if (typeof window.computeEpisodeStatuses === 'function') {
+                    return window.computeEpisodeStatuses(scores, eliminationOrder, scoredEpisodes, 14);
+                }
+                return { statuses: [], latestScoredEpisode: 0, inProgressEpisode: null, completedEpisodes: [] };
+            }, [scores, eliminationOrder, scoredEpisodes]);
+
+            const viewingEpisode = useMemo(() => {
+                if (isFinishedSeason) {
+                    return catchUpState?.viewingEpisode || episodeMeta.latestScoredEpisode || 14;
+                }
+                if (catchUpState && catchUpState.viewingEpisode) {
+                    return catchUpState.viewingEpisode;
+                }
+                return episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
+            }, [catchUpState, episodeMeta, isFinishedSeason]);
+
+            const maxWatchedEpisode = useMemo(() => {
+                if (catchUpState && catchUpState.maxWatchedEpisode) {
+                    return catchUpState.maxWatchedEpisode;
+                }
+                return episodeMeta.latestScoredEpisode || 1;
+            }, [catchUpState, episodeMeta]);
+
+            // Filtered masked state
+            const activeScores = useMemo(() => {
+                if (typeof window.filterScoresByEpisode === 'function') {
+                    return window.filterScoresByEpisode(scores, viewingEpisode, true);
+                }
+                return scores;
+            }, [scores, viewingEpisode]);
+
+            const activeEliminationOrder = useMemo(() => {
+                if (typeof window.filterEliminationsByEpisode === 'function') {
+                    return window.filterEliminationsByEpisode(eliminationOrder, viewingEpisode);
+                }
+                return eliminationOrder;
+            }, [eliminationOrder, viewingEpisode]);
+
+            const activeWinner = useMemo(() => {
+                if (typeof window.filterWinnerByEpisode === 'function') {
+                    return window.filterWinnerByEpisode(winner, viewingEpisode, 14);
+                }
+                return winner;
+            }, [winner, viewingEpisode]);
+
+            useEffect(() => {
+                if (isFinishedSeason) return;
+                if (!episodeMeta || (!episodeMeta.latestScoredEpisode && !episodeMeta.inProgressEpisode)) return;
+                if (!window.SurvivorEpisodeFilter) return;
+
+                const status = window.SurvivorEpisodeFilter.evaluateCatchUpStatus(
+                    activeSeasonId,
+                    episodeMeta.latestScoredEpisode,
+                    episodeMeta.inProgressEpisode,
+                    episodeMeta.completedEpisodes
+                );
+
+                if (status.needsModal) {
+                    setShowCatchUpModal(true);
+                }
+            }, [activeSeasonId, episodeMeta.latestScoredEpisode, episodeMeta.inProgressEpisode, isFinishedSeason]);
+
+            useEffect(() => {
+                const handleFilterChange = (e) => {
+                    if (e.detail && e.detail.seasonId === activeSeasonId) {
+                        setCatchUpStateLocal(e.detail.state);
+                    }
+                };
+                const handleStorageChange = (e) => {
+                    if (e.key === `survivor_catchup_${activeSeasonId}` && e.newValue) {
+                        try {
+                            setCatchUpStateLocal(JSON.parse(e.newValue));
+                        } catch (err) {}
+                    }
+                };
+                window.addEventListener('episodeFilterChanged', handleFilterChange);
+                window.addEventListener('storage', handleStorageChange);
+                return () => {
+                    window.removeEventListener('episodeFilterChanged', handleFilterChange);
+                    window.removeEventListener('storage', handleStorageChange);
+                };
+            }, [activeSeasonId]);
+
+            const handleSelectEpisode = (ep, isInProgress) => {
+                const epNum = parseInt(ep);
+                if (epNum <= maxWatchedEpisode) {
+                    const liveEp = episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
+                    const newState = {
+                        maxWatchedEpisode: maxWatchedEpisode,
+                        viewingEpisode: epNum,
+                        latestScoredEpisodeAtChoice: liveEp,
+                        isLiveStreaming: isInProgress && epNum === episodeMeta.inProgressEpisode
+                    };
+                    if (window.SurvivorEpisodeFilter) {
+                        window.SurvivorEpisodeFilter.setCatchUpState(activeSeasonId, newState);
+                    }
+                    setCatchUpStateLocal(newState);
+                } else {
+                    setPendingConfirmEpisode(epNum);
+                    setPendingIsInProgress(Boolean(isInProgress));
+                }
+            };
+
+            const handleConfirmJumpToLive = () => {
+                const liveEp = episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
+                const isInProgress = Boolean(episodeMeta.inProgressEpisode);
+                if (liveEp > maxWatchedEpisode) {
+                    setPendingConfirmEpisode(liveEp);
+                    setPendingIsInProgress(isInProgress);
+                } else {
+                    handleSelectEpisode(liveEp, isInProgress);
+                }
+            };
+            
             // Calculate team scores
             const getTeamScore = (teamId) => {
                 const roster = players.filter(p => playerTeams[p.id] === teamId);
@@ -2081,7 +2206,7 @@
                 
                 roster.forEach(player => {
                     const bfEp = getBackfillEpisode(player.id, draftState);
-                    const playerScores = scores && (scores[player.id] || scores[String(player.id)]) ? (scores[player.id] || scores[String(player.id)]) : {};
+                    const playerScores = activeScores && (activeScores[player.id] || activeScores[String(player.id)]) ? (activeScores[player.id] || activeScores[String(player.id)]) : {};
                     
                     if (typeof playerScores === 'object' && playerScores !== null) {
                         Object.keys(playerScores).forEach(ep => {
@@ -2103,7 +2228,7 @@
                     }
                     
                     // Add elimination bonus
-                    const elimEp = eliminationOrder && (eliminationOrder[player.id] || eliminationOrder[String(player.id)]);
+                    const elimEp = activeEliminationOrder && (activeEliminationOrder[player.id] || activeEliminationOrder[String(player.id)]);
                     if (elimEp) {
                         const episode = parseInt(elimEp) || 0;
                         if (bfEp === null || episode > bfEp) {
@@ -2113,9 +2238,9 @@
                 });
                 
                 // Add winner bonus (20 points if winner is on this team)
-                if (winner) {
+                if (activeWinner) {
                     const roster = players.filter(p => playerTeams[p.id] === teamId);
-                    if (roster.some(p => p.id === parseInt(winner))) {
+                    if (roster.some(p => p.id === parseInt(activeWinner))) {
                         total += 20; // Flat 20 point bonus for having the winner on your team
                     }
                 }
@@ -2129,7 +2254,7 @@
                     score: getTeamScore(team.id),
                     roster: players.filter(p => playerTeams[p.id] === team.id)
                 })).sort((a, b) => b.score - a.score);
-            }, [playerTeams, scores, eliminationOrder, winner, players]);
+            }, [playerTeams, activeScores, activeEliminationOrder, activeWinner, players]);
             
             const getTribeBadgeColor = (tribe) => {
                 if (tribe === 'Cila') return 'bg-orange-950/80 text-orange-200 border border-orange-500/60 shadow-sm';
@@ -2156,7 +2281,7 @@
 
             const playersByTribe = useMemo(() => {
                 const map = {};
-                const epNum = parseInt(lastSelectedEpisode) || 1;
+                const epNum = parseInt(viewingEpisode) || 1;
                 players.forEach(p => {
                     const tName = typeof window.getTribeForEpisode === 'function'
                         ? window.getTribeForEpisode(p, epNum)
@@ -2165,7 +2290,7 @@
                     map[tName].push(p);
                 });
                 return map;
-            }, [players, lastSelectedEpisode]);
+            }, [players, viewingEpisode]);
 
             const togglePlayerSelected = (playerId) => {
                 setSelectedPlayerIds(prev => 
@@ -2174,9 +2299,9 @@
             };
 
             const toggleTribeSelected = (tribeName, tribePlayers) => {
-                const selectedEpNum = parseInt(lastSelectedEpisode) || 1;
+                const selectedEpNum = parseInt(viewingEpisode) || 1;
                 const activeTribePlayerIds = tribePlayers
-                    .filter(p => !eliminationOrder[p.id] || parseInt(eliminationOrder[p.id]) >= selectedEpNum)
+                    .filter(p => !activeEliminationOrder[p.id] || parseInt(activeEliminationOrder[p.id]) >= selectedEpNum)
                     .map(p => p.id);
                 if (activeTribePlayerIds.length === 0) return;
 
@@ -2217,7 +2342,7 @@
             const getPlayerScore = (playerId) => {
                 const pId = parseInt(playerId);
                 const bfEp = getBackfillEpisode(playerId, draftState);
-                const playerScores = scores && (scores[playerId] || scores[pId]) ? (scores[playerId] || scores[pId]) : {};
+                const playerScores = activeScores && (activeScores[playerId] || activeScores[pId]) ? (activeScores[playerId] || activeScores[pId]) : {};
                 let total = 0;
                 
                 if (typeof playerScores === 'object' && playerScores !== null) {
@@ -2239,7 +2364,7 @@
                 }
                 
                 // Add elimination bonus
-                const elimEp = eliminationOrder && (eliminationOrder[playerId] || eliminationOrder[pId]);
+                const elimEp = activeEliminationOrder && (activeEliminationOrder[playerId] || activeEliminationOrder[pId]);
                 if (elimEp) {
                     const episode = parseInt(elimEp) || 0;
                     if (bfEp === null || episode > bfEp) {
@@ -2249,13 +2374,11 @@
                 
                 return total;
             };
-            
-            const isFinishedSeason = (seasonData && seasonData.status === 'finished') || (seasonConfig && seasonConfig.status === 'previous') || activeSeasonId === 'season-50';
 
             const getPlayerBreakdown = (playerId) => {
                 const pId = parseInt(playerId);
                 const bfEp = getBackfillEpisode(playerId, draftState);
-                const playerScores = scores && (scores[playerId] || scores[pId]) ? (scores[playerId] || scores[pId]) : {};
+                const playerScores = activeScores && (activeScores[playerId] || activeScores[pId]) ? (activeScores[playerId] || activeScores[pId]) : {};
                 const breakdown = [];
                 
                 if (typeof playerScores === 'object' && playerScores !== null) {
@@ -2285,15 +2408,16 @@
                     });
                 }
 
-                // Add tribe swap & merge events
+                // Add tribe swap & merge events that occurred <= viewingEpisode
                 if (players && Array.isArray(players)) {
                     const playerObj = players.find(p => p && (p.id === playerId || p.id === pId));
                     if (playerObj) {
                         const progression = getPlayerTribeProgression(playerObj);
                         progression.forEach(th => {
-                            if (th && (th.type === 'swap' || th.type === 'merge')) {
+                            const epNum = th.episode || 1;
+                            if (epNum <= viewingEpisode && th && (th.type === 'swap' || th.type === 'merge')) {
                                 breakdown.push({
-                                    episode: th.episode || 1,
+                                    episode: epNum,
                                     category: th.type === 'merge' ? `🏝️ Reached Merge (${th.tribe} Tribe)` : `🔄 Tribe Swap (${th.tribe} Tribe)`,
                                     points: 0,
                                     note: th.label || `Transferred to ${th.tribe}`
@@ -2303,8 +2427,8 @@
                     }
                 }
                 
-                // Add elimination bonus if exists
-                const elimEp = eliminationOrder && (eliminationOrder[playerId] || eliminationOrder[pId]);
+                // Add elimination bonus if eliminated <= viewingEpisode
+                const elimEp = activeEliminationOrder && (activeEliminationOrder[playerId] || activeEliminationOrder[pId]);
                 if (elimEp) {
                     const episode = parseInt(elimEp) || 1;
                     const isPreBackfill = bfEp !== null && episode <= bfEp;
@@ -2319,8 +2443,8 @@
                     });
                 }
                 
-                // Add winner bonus if this player won
-                if (winner && (parseInt(winner) === playerId || parseInt(winner) === pId)) {
+                // Add winner bonus if this player won and viewingEpisode reaches finale
+                if (activeWinner && (parseInt(activeWinner) === playerId || parseInt(activeWinner) === pId)) {
                     breakdown.push({
                         episode: 14,
                         category: 'Winner Bonus',
@@ -2509,29 +2633,35 @@
                         )
                     ),
                     
-                    // Episodes Scored Tracker
-                    h(EpisodesScoredTracker, {
-                        scores: scores,
-                        eliminationOrder: eliminationOrder,
-                        scoredEpisodes: scoredEpisodes,
+                    // Universal Episode Catch-Up & Spoiler Protection Tracker
+                    window.SurvivorEpisodeFilter && h(window.SurvivorEpisodeFilter.UniversalEpisodeTracker, {
+                        viewingEpisode: viewingEpisode,
+                        maxWatchedEpisode: maxWatchedEpisode,
+                        latestScoredEpisode: episodeMeta.latestScoredEpisode,
+                        inProgressEpisode: episodeMeta.inProgressEpisode,
+                        episodeStatuses: episodeMeta.statuses,
                         theme: theme,
-                        onEpisodeClick: (epNum) => {
-                            const epStr = String(epNum);
-                            setLastSelectedEpisode(epStr);
-                            localStorage.setItem('survivor_last_selected_episode', epStr);
-                            setShowAddScore(true);
-                        }
+                        onSelectEpisode: handleSelectEpisode
+                    }),
+
+                    // Historical Status Banner (when viewing earlier episode)
+                    window.SurvivorEpisodeFilter && h(window.SurvivorEpisodeFilter.HistoricalStatusBanner, {
+                        viewingEpisode: viewingEpisode,
+                        latestScoredEpisode: episodeMeta.latestScoredEpisode,
+                        inProgressEpisode: episodeMeta.inProgressEpisode,
+                        onJumpToLive: handleConfirmJumpToLive
                     }),
 
                     // Weekly Team Point Progression Graph
                     h(TeamScoreGraph, {
                         leaderboard: leaderboard,
-                        scores: scores,
-                        eliminationOrder: eliminationOrder,
-                        winner: winner,
+                        scores: activeScores,
+                        eliminationOrder: activeEliminationOrder,
+                        winner: activeWinner,
                         playerTeams: playerTeams,
                         players: players,
-                        draftState: draftState
+                        draftState: draftState,
+                        targetMaxEpisode: viewingEpisode
                     }),
 
                     // Leaderboard
@@ -2561,16 +2691,16 @@
                                             h('div', {},
                                                 h('div', { className: `text-2xl font-bold ${team.textColor}` }, team.name),
                                                 (() => {
-                                                    const activeCount = team.roster.filter(p => !eliminationOrder || (!eliminationOrder[p.id] && !eliminationOrder[String(p.id)])).length;
+                                                    const activeCount = team.roster.filter(p => !activeEliminationOrder || (activeEliminationOrder[p.id] === undefined && activeEliminationOrder[String(p.id)] === undefined)).length;
                                                     return h('div', { className: 'text-xs text-gray-500 font-semibold' }, `${activeCount} of ${team.roster.length} active players`);
                                                 })()
                                             ),
                                             // Survivor Parchment Vote Cards (Arranged in-line with team name)
                                             team.roster.length > 0 && h('div', { className: 'flex flex-wrap items-center gap-2 ml-2' },
                                                 team.roster.map(player => {
-                                                    const isElim = eliminationOrder && eliminationOrder[player.id];
-                                                    const isWin = winner && parseInt(winner) === player.id;
-                                                    const currTribe = typeof window.getTribeForEpisode === 'function' ? window.getTribeForEpisode(player, 99) : (player.tribe || player.startingTribe);
+                                                    const isElim = activeEliminationOrder && (activeEliminationOrder[player.id] !== undefined || activeEliminationOrder[String(player.id)] !== undefined);
+                                                    const isWin = activeWinner && parseInt(activeWinner) === player.id;
+                                                    const currTribe = typeof window.getTribeForEpisode === 'function' ? window.getTribeForEpisode(player, viewingEpisode) : (player.tribe || player.startingTribe);
                                                     return h(ParchmentContestantTag, {
                                                         key: player.id,
                                                         player: player,
@@ -2601,7 +2731,7 @@
                                         h(TeamRosterContributionBar, { roster: team.roster, getPlayerScore: getPlayerScore }),
                                         
                                         // 2. Episode Point Category Stacked Bar Chart
-                                        h(TeamEventStackedBarChart, { roster: team.roster, scores: scores, draftState: draftState, eliminationOrder: eliminationOrder }),
+                                        h(TeamEventStackedBarChart, { roster: team.roster, scores: activeScores, draftState: draftState, eliminationOrder: activeEliminationOrder }),
 
                                         // 3. Detailed Player Breakdown List
                                         team.roster.length === 0 ? 
@@ -2609,8 +2739,8 @@
                                             team.roster.map(player => {
                                                 const playerScore = getPlayerScore(player.id);
                                                 const breakdown = getPlayerBreakdown(player.id);
-                                                const isEliminated = eliminationOrder && eliminationOrder[player.id];
-                                                const isWinner = winner && parseInt(winner) === player.id;
+                                                const isEliminated = activeEliminationOrder && (activeEliminationOrder[player.id] !== undefined || activeEliminationOrder[String(player.id)] !== undefined);
+                                                const isWinner = activeWinner && parseInt(activeWinner) === player.id;
                                                 const isBackfilled = draftState && draftState.backfilledPlayers && draftState.backfilledPlayers[player.id];
                                                 
                                                 const playerHeaderChildren = [h('span', { key: 'name' }, player.name)];
@@ -3313,6 +3443,69 @@
                     h(InstallAppModal, {
                         isOpen: showInstallModal,
                         onClose: () => setShowInstallModal(false)
+                    }),
+
+                    // Catch-Up Entrance Blocker Modal
+                    window.SurvivorEpisodeFilter && h(window.SurvivorEpisodeFilter.CatchUpEntranceModal, {
+                        isOpen: showCatchUpModal,
+                        seasonName: (seasonData && seasonData.title) ? seasonData.title : 'Season 51',
+                        latestScoredEpisode: episodeMeta.latestScoredEpisode,
+                        inProgressEpisode: episodeMeta.inProgressEpisode,
+                        completedEpisodes: episodeMeta.completedEpisodes,
+                        onConfirmLive: (liveEp, isLiveStream) => {
+                            const newState = {
+                                maxWatchedEpisode: liveEp,
+                                viewingEpisode: liveEp,
+                                latestScoredEpisodeAtChoice: liveEp,
+                                isLiveStreaming: isLiveStream
+                            };
+                            if (window.SurvivorEpisodeFilter) {
+                                window.SurvivorEpisodeFilter.setCatchUpState(activeSeasonId, newState);
+                            }
+                            setCatchUpStateLocal(newState);
+                            setShowCatchUpModal(false);
+                        },
+                        onSelectPastEpisode: (pastEp) => {
+                            const liveEp = episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
+                            const newState = {
+                                maxWatchedEpisode: pastEp,
+                                viewingEpisode: pastEp,
+                                latestScoredEpisodeAtChoice: liveEp,
+                                isLiveStreaming: false
+                            };
+                            if (window.SurvivorEpisodeFilter) {
+                                window.SurvivorEpisodeFilter.setCatchUpState(activeSeasonId, newState);
+                            }
+                            setCatchUpStateLocal(newState);
+                            setShowCatchUpModal(false);
+                        }
+                    }),
+
+                    // Spoiler Warning Confirmation Modal
+                    window.SurvivorEpisodeFilter && h(window.SurvivorEpisodeFilter.SpoilerConfirmModal, {
+                        isOpen: Boolean(pendingConfirmEpisode),
+                        targetEpisode: pendingConfirmEpisode,
+                        isTargetInProgress: pendingIsInProgress,
+                        onConfirm: () => {
+                            const liveEp = episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
+                            const targetEp = pendingConfirmEpisode;
+                            const newState = {
+                                maxWatchedEpisode: Math.max(maxWatchedEpisode, targetEp),
+                                viewingEpisode: targetEp,
+                                latestScoredEpisodeAtChoice: liveEp,
+                                isLiveStreaming: pendingIsInProgress
+                            };
+                            if (window.SurvivorEpisodeFilter) {
+                                window.SurvivorEpisodeFilter.setCatchUpState(activeSeasonId, newState);
+                            }
+                            setCatchUpStateLocal(newState);
+                            setPendingConfirmEpisode(null);
+                            setPendingIsInProgress(false);
+                        },
+                        onCancel: () => {
+                            setPendingConfirmEpisode(null);
+                            setPendingIsInProgress(false);
+                        }
                     })
                 )
             );

@@ -1,0 +1,481 @@
+/**
+ * Universal Episode Catch-Up & Spoiler Protection Module
+ * Shared across index.html, draft.html, and chat.html
+ */
+
+(function(window) {
+    'use strict';
+
+    const h = window.React ? window.React.createElement : null;
+
+    /**
+     * Storage Helpers (Cookie + LocalStorage dual sync)
+     */
+    function getCatchUpState(seasonId = 'season-51') {
+        const key = `survivor_catchup_${seasonId}`;
+        // 1. Try LocalStorage
+        try {
+            const rawLocal = localStorage.getItem(key);
+            if (rawLocal) {
+                const parsed = JSON.parse(rawLocal);
+                if (parsed && typeof parsed === 'object') return parsed;
+            }
+        } catch (e) {
+            console.warn('LocalStorage read error:', e);
+        }
+
+        // 2. Fallback to Cookie
+        try {
+            const cookies = document.cookie ? document.cookie.split('; ') : [];
+            for (const c of cookies) {
+                const [cKey, ...cVal] = c.split('=');
+                if (cKey === key) {
+                    const parsed = JSON.parse(decodeURIComponent(cVal.join('=')));
+                    if (parsed && typeof parsed === 'object') return parsed;
+                }
+            }
+        } catch (e) {
+            console.warn('Cookie read error:', e);
+        }
+
+        return null;
+    }
+
+    function setCatchUpState(seasonId = 'season-51', state = {}) {
+        const key = `survivor_catchup_${seasonId}`;
+        const payload = {
+            maxWatchedEpisode: parseInt(state.maxWatchedEpisode) || 1,
+            viewingEpisode: parseInt(state.viewingEpisode) || 1,
+            latestScoredEpisodeAtChoice: parseInt(state.latestScoredEpisodeAtChoice) || 1,
+            isLiveStreaming: Boolean(state.isLiveStreaming),
+            updatedAt: Date.now()
+        };
+
+        const str = JSON.stringify(payload);
+
+        // 1. Save to LocalStorage
+        try {
+            localStorage.setItem(key, str);
+        } catch (e) {
+            console.warn('LocalStorage write error:', e);
+        }
+
+        // 2. Save to Cookie (1 year expiry)
+        try {
+            const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString();
+            document.cookie = `${key}=${encodeURIComponent(str)}; expires=${expires}; path=/; SameSite=Lax`;
+        } catch (e) {
+            console.warn('Cookie write error:', e);
+        }
+
+        // 3. Dispatch custom event for in-memory sync across components
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            const evt = typeof CustomEvent === 'function'
+                ? new CustomEvent('episodeFilterChanged', { detail: { seasonId, state: payload } })
+                : { type: 'episodeFilterChanged', detail: { seasonId, state: payload } };
+            window.dispatchEvent(evt);
+        }
+
+        return payload;
+    }
+
+    /**
+     * Clears stored catch-up preferences for a season
+     */
+    function clearCatchUpState(seasonId) {
+        if (!seasonId) return;
+        const key = `survivor_catchup_${seasonId}`;
+        try {
+            if (typeof localStorage !== 'undefined') {
+                localStorage.removeItem(key);
+            }
+        } catch (e) {}
+        try {
+            if (typeof document !== 'undefined') {
+                document.cookie = `${key}=; Max-Age=0; path=/; SameSite=Lax`;
+            }
+        } catch (e) {}
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+            const evt = typeof CustomEvent === 'function'
+                ? new CustomEvent('episodeFilterChanged', { detail: { seasonId, state: null } })
+                : { type: 'episodeFilterChanged', detail: { seasonId, state: null } };
+            window.dispatchEvent(evt);
+        }
+    }
+
+    /**
+     * Evaluates whether entrance modal is needed and determines safe initial viewing episode.
+     */
+    function evaluateCatchUpStatus(seasonId, latestScoredEp, inProgressEp, completedEpisodes = []) {
+        const saved = getCatchUpState(seasonId);
+        const maxAvailable = inProgressEp || latestScoredEp || 1;
+
+        if (!saved) {
+            // First time visit
+            return {
+                needsModal: true,
+                isStale: false,
+                initialEp: maxAvailable,
+                viewingEpisode: maxAvailable,
+                maxWatchedEp: maxAvailable,
+                maxWatchedEpisode: maxAvailable
+            };
+        }
+
+        // If a new episode has aired/started scoring since the user's choice:
+        // Hold them safely at their last confirmed watched episode and trigger modal
+        if (maxAvailable > (saved.latestScoredEpisodeAtChoice || 0)) {
+            const safeEp = saved.viewingEpisode || saved.maxWatchedEpisode || 1;
+            return {
+                needsModal: true,
+                isStale: true,
+                initialEp: safeEp,
+                viewingEpisode: safeEp,
+                maxWatchedEp: saved.maxWatchedEpisode || 1,
+                maxWatchedEpisode: saved.maxWatchedEpisode || 1
+            };
+        }
+
+        // Existing up-to-date preference
+        const safeView = saved.viewingEpisode || saved.maxWatchedEpisode || maxAvailable;
+        return {
+            needsModal: false,
+            isStale: false,
+            initialEp: Math.min(safeView, maxAvailable),
+            viewingEpisode: Math.min(safeView, maxAvailable),
+            maxWatchedEp: Math.min(saved.maxWatchedEpisode || 1, maxAvailable),
+            maxWatchedEpisode: Math.min(saved.maxWatchedEpisode || 1, maxAvailable)
+        };
+    }
+
+    /**
+     * React Component: UniversalEpisodeTracker
+     * Mounts the global "Episodes Scored" interactive filter bar
+     */
+    function UniversalEpisodeTracker({
+        viewingEpisode = 1,
+        maxWatchedEpisode = 1,
+        latestScoredEpisode = 1,
+        inProgressEpisode = null,
+        episodeStatuses = [],
+        onSelectEpisode,
+        theme = 'tribal'
+    }) {
+        if (!h) return null;
+        const isTribal = theme === 'tribal';
+        const viewingEpNum = parseInt(viewingEpisode) || 1;
+        const maxWatchedNum = parseInt(maxWatchedEpisode) || 1;
+
+        return h('div', {
+            className: 'bg-white/95 backdrop-blur-md rounded-2xl p-4 mb-6 shadow-xl border border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4'
+        },
+            // Left Label & Legend
+            h('div', { className: 'flex flex-wrap items-center gap-3' },
+                h('div', { className: 'flex items-center gap-2' },
+                    h('span', { className: 'text-lg' }, '📺'),
+                    h('span', { className: 'text-xs font-black uppercase tracking-wider text-gray-800 font-mono' }, 'Episodes Scored:'),
+                    h('span', {
+                        className: 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-mono'
+                    }, `Viewing: Ep ${viewingEpNum}`)
+                ),
+                h('div', { className: 'hidden sm:flex items-center gap-2 text-[10px] font-bold text-gray-500 border-l border-gray-200 pl-3' },
+                    h('span', { className: 'flex items-center gap-1' },
+                        h('span', { className: 'w-1.5 h-1.5 rounded-full bg-emerald-500' }), 'Scored (✓)'
+                    ),
+                    h('span', { className: 'flex items-center gap-1' },
+                        h('span', { className: 'w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse' }), 'Live Scoring (⚪)'
+                    ),
+                    h('span', { className: 'flex items-center gap-1' },
+                        h('span', { className: 'w-1.5 h-1.5 rounded-full bg-gray-400' }), 'Unwatched'
+                    ),
+                    h('span', { className: 'flex items-center gap-1' },
+                        h('span', { className: 'w-1.5 h-1.5 rounded-full bg-amber-700/40' }), 'Unscored (✗)'
+                    )
+                )
+            ),
+
+            // Episode Badges
+            h('div', { className: 'flex flex-wrap items-center gap-1.5 w-full md:w-auto overflow-x-auto py-1' },
+                episodeStatuses.map(item => {
+                    const ep = item.ep;
+                    const isViewing = ep === viewingEpNum;
+                    const isLit = ep <= viewingEpNum;
+                    const isInProgress = item.status === 'in-progress' || ep === inProgressEpisode;
+                    const isSelectable = item.isSelectable;
+
+                    let badgeStyle = '';
+                    let titleText = `Episode ${ep}: ${item.label}`;
+
+                    if (!isSelectable) {
+                        badgeStyle = 'bg-gray-100/70 border-gray-200 text-gray-400 cursor-not-allowed opacity-50';
+                        titleText += ' (Not yet aired or scored)';
+                    } else if (isViewing && isInProgress) {
+                        badgeStyle = 'bg-gradient-to-r from-cyan-500 to-emerald-500 text-white font-extrabold ring-2 ring-cyan-400 ring-offset-1 shadow-lg animate-pulse cursor-pointer';
+                        titleText = `Episode ${ep}: Viewing LIVE Scoring Stream! (${item.count || 0} events logged)`;
+                    } else if (isViewing) {
+                        badgeStyle = 'bg-emerald-600 border-emerald-700 text-white font-black ring-2 ring-emerald-400 ring-offset-1 shadow-md cursor-pointer';
+                        titleText = `Episode ${ep}: Currently Viewing (Click to re-select)`;
+                    } else if (isLit) {
+                        badgeStyle = isTribal
+                            ? 'bg-emerald-950/80 border-emerald-500/70 text-emerald-300 hover:bg-emerald-900 cursor-pointer shadow-xs'
+                            : 'bg-emerald-100 border-emerald-400 text-emerald-900 hover:bg-emerald-200 cursor-pointer shadow-xs';
+                        titleText = `Episode ${ep}: Scored & Viewed (Click to switch view)`;
+                    } else if (isInProgress) {
+                        badgeStyle = 'bg-cyan-50 border-cyan-400 text-cyan-800 hover:bg-cyan-100 cursor-pointer shadow-xs animate-pulse';
+                        titleText = `Episode ${ep}: Currently Being Scored Live! (Click to watch live stream)`;
+                    } else if (ep <= latestScoredEpisode) {
+                        // Available but unwatched
+                        badgeStyle = 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200 cursor-pointer shadow-xs';
+                        titleText = `Episode ${ep}: Available (Click to reveal)`;
+                    } else {
+                        badgeStyle = 'bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed opacity-60';
+                    }
+
+                    return h('button', {
+                        key: ep,
+                        type: 'button',
+                        disabled: !isSelectable,
+                        onClick: () => {
+                            if (isSelectable && typeof onSelectEpisode === 'function') {
+                                onSelectEpisode(ep, isInProgress);
+                            }
+                        },
+                        title: titleText,
+                        className: `px-2.5 py-1 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 transition-all duration-150 ${badgeStyle}`
+                    },
+                        h('span', {}, `E${ep}`),
+                        h('span', { className: 'text-[10px] font-black' },
+                            isInProgress ? '⚪' : item.icon
+                        )
+                    );
+                })
+            )
+        );
+    }
+
+    /**
+     * React Component: CatchUpEntranceModal
+     * First-time or new-episode entrance blocker modal
+     */
+    function CatchUpEntranceModal({
+        isOpen = false,
+        seasonName = 'Season 51',
+        latestScoredEpisode = 1,
+        inProgressEpisode = null,
+        completedEpisodes = [],
+        onConfirmLive,
+        onSelectPastEpisode
+    }) {
+        if (!isOpen || !h) return null;
+
+        const liveTargetEp = inProgressEpisode || latestScoredEpisode || 1;
+        const isLiveInProgress = Boolean(inProgressEpisode);
+        const pastEpisodes = completedEpisodes.filter(ep => ep < liveTargetEp);
+
+        return h('div', {
+            className: 'fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in'
+        },
+            h('div', {
+                className: 'bg-white rounded-3xl max-w-lg w-full p-6 md:p-8 shadow-2xl border-4 border-amber-500/30 text-gray-900 relative overflow-hidden'
+            },
+                // Ambient Survivor Glow Header
+                h('div', { className: 'text-center mb-6' },
+                    h('div', { className: 'inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-100 text-amber-600 mb-3 text-3xl shadow-inner' },
+                        '🛡️'
+                    ),
+                    h('h2', {
+                        className: 'text-2xl md:text-3xl font-black uppercase tracking-wider text-gray-900',
+                        style: { fontFamily: '"Bebas Neue", cursive' }
+                    }, `${seasonName} • Spoiler Protection`),
+                    h('p', { className: 'text-sm text-gray-600 mt-2 leading-relaxed' },
+                        'This season is actively in progress! To avoid spoiling tribal council eliminations and point shifts, select the latest episode you have watched.'
+                    )
+                ),
+
+                // Option 1: Live Button
+                h('div', { className: 'mb-6' },
+                    h('button', {
+                        type: 'button',
+                        onClick: () => {
+                            if (typeof onConfirmLive === 'function') {
+                                onConfirmLive(liveTargetEp, isLiveInProgress);
+                            }
+                        },
+                        className: 'w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 text-white font-black text-base shadow-xl hover:shadow-orange-500/25 hover:scale-[1.02] active:scale-[0.98] transition flex items-center justify-center gap-3 cursor-pointer'
+                    },
+                        h('span', { className: 'text-xl' }, '⚡'),
+                        h('div', { className: 'text-left' },
+                            h('div', { className: 'font-black leading-tight' },
+                                isLiveInProgress
+                                    ? `I'm Live! Stream Episode ${liveTargetEp} Scoring`
+                                    : `I'm Live! Take me to Episode ${liveTargetEp}`
+                            ),
+                            h('div', { className: 'text-xs font-normal text-amber-100' },
+                                isLiveInProgress ? 'Episode is currently being scored in real-time' : 'Show full latest standings'
+                            )
+                        )
+                    )
+                ),
+
+                // Option 2: Earlier Episodes
+                h('div', { className: 'border-t border-gray-200 pt-5' },
+                    h('div', { className: 'text-xs font-black uppercase tracking-wider text-gray-500 mb-3 text-center' },
+                        'Or pick the last episode you have seen:'
+                    ),
+                    pastEpisodes.length > 0
+                        ? h('div', { className: 'grid grid-cols-3 sm:grid-cols-4 gap-2' },
+                            pastEpisodes.map(ep => h('button', {
+                                key: ep,
+                                type: 'button',
+                                onClick: () => {
+                                    if (typeof onSelectPastEpisode === 'function') {
+                                        onSelectPastEpisode(ep);
+                                    }
+                                },
+                                className: 'py-2.5 px-3 rounded-xl border border-gray-300 bg-gray-50 hover:bg-orange-50 hover:border-orange-400 hover:text-orange-600 font-bold text-sm text-gray-800 transition flex items-center justify-center gap-1 cursor-pointer'
+                            },
+                                h('span', {}, `Ep ${ep}`)
+                            ))
+                        )
+                        : h('div', { className: 'text-xs text-gray-400 italic text-center py-2' },
+                            'No earlier episodes scored yet.'
+                        )
+                )
+            )
+        );
+    }
+
+    /**
+     * React Component: SpoilerConfirmModal
+     * Confirmation prompt when advancing forward
+     */
+    function SpoilerConfirmModal({
+        isOpen = false,
+        targetEpisode = null,
+        isTargetInProgress = false,
+        onConfirm,
+        onCancel
+    }) {
+        if (!isOpen || !targetEpisode || !h) return null;
+
+        return h('div', {
+            className: 'fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-fade-in'
+        },
+            h('div', {
+                className: 'bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-200 text-gray-900'
+            },
+                h('div', { className: 'flex items-center gap-3 mb-4' },
+                    h('div', { className: 'w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-2xl flex-shrink-0' },
+                        '⚠️'
+                    ),
+                    h('div', {},
+                        h('h3', { className: 'font-black text-lg text-gray-900' }, `Reveal Episode ${targetEpisode}?`),
+                        h('p', { className: 'text-xs text-amber-700 font-bold' }, 'Potential Spoiler Ahead')
+                    )
+                ),
+                h('p', { className: 'text-sm text-gray-600 mb-6 leading-relaxed' },
+                    isTargetInProgress
+                        ? `Episode ${targetEpisode} is currently being scored live! Advancing will reveal live points, immunity wins, and elimination events as they happen.`
+                        : `Advancing to Episode ${targetEpisode} will reveal scores, tribe swaps, and tribal council eliminations through the end of Episode ${targetEpisode}. Have you watched this episode?`
+                ),
+                h('div', { className: 'flex items-center justify-end gap-3' },
+                    h('button', {
+                        type: 'button',
+                        onClick: onCancel,
+                        className: 'px-4 py-2.5 rounded-xl border border-gray-300 font-bold text-gray-700 hover:bg-gray-100 transition cursor-pointer text-sm'
+                    }, 'Cancel (Stay Safe)'),
+                    h('button', {
+                        type: 'button',
+                        onClick: onConfirm,
+                        className: 'px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-black transition cursor-pointer text-sm shadow-md'
+                    }, isTargetInProgress ? `Yes, Stream Live (Ep ${targetEpisode})` : `Yes, I've Watched It`)
+                )
+            )
+        );
+    }
+
+    /**
+     * React Component: HistoricalStatusBanner
+     * Displays a clean indicator when viewing an earlier episode with a 1-click jump to live
+     */
+    function HistoricalStatusBanner({
+        viewingEpisode = 1,
+        latestScoredEpisode = 1,
+        inProgressEpisode = null,
+        onJumpToLive
+    }) {
+        if (!h) return null;
+        const liveEp = inProgressEpisode || latestScoredEpisode || 1;
+        const isLiveInProgress = Boolean(inProgressEpisode);
+
+        if (viewingEpisode >= liveEp) return null;
+
+        return h('div', {
+            className: 'bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-2.5 mb-6 flex flex-wrap items-center justify-between gap-3 text-amber-900 shadow-xs'
+        },
+            h('div', { className: 'flex items-center gap-2 text-xs md:text-sm font-bold' },
+                h('span', { className: 'text-base' }, '⏳'),
+                h('span', {}, `Historical View: Displaying state as of Episode ${viewingEpisode}. Future episodes and eliminations are masked.`)
+            ),
+            h('button', {
+                type: 'button',
+                onClick: onJumpToLive,
+                className: 'px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-black text-xs transition cursor-pointer shadow-xs flex items-center gap-1.5'
+            },
+                h('span', {}, '⚡'),
+                h('span', {}, isLiveInProgress ? `Stream Live (Ep ${liveEp})` : `Jump to Live (Ep ${liveEp})`)
+            )
+        );
+    }
+
+    /**
+     * React Component: ChatSpoilerAdvisoryBanner
+     * Displayed in chat.html when viewing an earlier episode or live scoring
+     */
+    function ChatSpoilerAdvisoryBanner({
+        viewingEpisode = 1,
+        latestScoredEpisode = 1,
+        inProgressEpisode = null
+    }) {
+        if (!h) return null;
+        const liveEp = inProgressEpisode || latestScoredEpisode || 1;
+
+        if (inProgressEpisode && viewingEpisode === inProgressEpisode) {
+            return h('div', {
+                className: 'bg-cyan-50 border border-cyan-400 text-cyan-900 rounded-xl px-4 py-3 mb-4 flex items-center gap-3 shadow-xs'
+            },
+                h('span', { className: 'text-xl animate-pulse' }, '⚪'),
+                h('div', { className: 'text-xs md:text-sm font-bold' },
+                    `Live Scoring Active: Episode ${viewingEpisode} is currently being scored! Chat discussions may reference ongoing live events.`
+                )
+            );
+        }
+
+        if (viewingEpisode < liveEp) {
+            return h('div', {
+                className: 'bg-amber-50 border border-amber-400 text-amber-900 rounded-xl px-4 py-3 mb-4 flex items-center gap-3 shadow-xs'
+            },
+                h('span', { className: 'text-xl' }, '⚠️'),
+                h('div', { className: 'text-xs md:text-sm font-bold' },
+                    `Spoiler Advisory: You are viewing Episode ${viewingEpisode}. Live chat messages may discuss events from later episodes.`
+                )
+            );
+        }
+
+        return null;
+    }
+
+    // Export to global window
+    window.SurvivorEpisodeFilter = {
+        getCatchUpState,
+        setCatchUpState,
+        clearCatchUpState,
+        evaluateCatchUpStatus,
+        UniversalEpisodeTracker,
+        CatchUpEntranceModal,
+        SpoilerConfirmModal,
+        HistoricalStatusBanner,
+        ChatSpoilerAdvisoryBanner
+    };
+
+})(typeof window !== 'undefined' ? window : this);

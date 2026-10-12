@@ -308,6 +308,176 @@ function getTribeDotColor(tribeName = '', customTribes = []) {
     return style ? style.dotBg : 'bg-amber-400 border border-amber-200';
 }
 
+/**
+ * Filters a raw scores object so that only scores for episodes <= targetEpisode are included.
+ * @param {Object} scores - Map of playerId => { episodeNum: { scoreId: { points, ... } } }
+ * @param {number} targetEpisode - Target episode limit
+ * @param {boolean} [allowInProgress=true] - Whether to include targetEpisode if in progress
+ * @returns {Object} Filtered scores object
+ */
+function filterScoresByEpisode(scores = {}, targetEpisode = 14, allowInProgress = true) {
+    if (!scores || typeof scores !== 'object') return {};
+    const maxEp = parseInt(targetEpisode) || 14;
+    const filtered = {};
+
+    Object.entries(scores).forEach(([playerId, playerEpisodes]) => {
+        if (!playerEpisodes || typeof playerEpisodes !== 'object') return;
+        const filteredEpisodes = {};
+        let hasEpisodes = false;
+
+        Object.entries(playerEpisodes).forEach(([epKey, epScores]) => {
+            const epNum = parseInt(epKey);
+            if (isNaN(epNum)) return;
+            if (epNum <= maxEp) {
+                filteredEpisodes[epKey] = epScores;
+                hasEpisodes = true;
+            }
+        });
+
+        if (hasEpisodes) {
+            filtered[playerId] = filteredEpisodes;
+        }
+    });
+
+    return filtered;
+}
+
+/**
+ * Filters elimination order so contestants eliminated after targetEpisode are treated as alive.
+ * @param {Object} eliminationOrder - Map of playerId => eliminationEpisode
+ * @param {number} targetEpisode - Target episode limit
+ * @returns {Object} Filtered elimination map containing only eliminations that occurred <= targetEpisode
+ */
+function filterEliminationsByEpisode(eliminationOrder = {}, targetEpisode = 14) {
+    if (!eliminationOrder || typeof eliminationOrder !== 'object') return {};
+    const maxEp = parseInt(targetEpisode) || 14;
+    const filtered = {};
+
+    Object.entries(eliminationOrder).forEach(([playerId, elimEp]) => {
+        const ep = parseInt(elimEp);
+        if (!isNaN(ep) && ep <= maxEp) {
+            filtered[playerId] = ep;
+        }
+    });
+
+    return filtered;
+}
+
+/**
+ * Determines whether the season winner bonus should be applied at targetEpisode.
+ * @param {string|number|null} winner - Winner player ID
+ * @param {number} targetEpisode - Current viewing episode
+ * @param {number} [finaleEpisode=14] - Season finale episode
+ * @returns {string|number|null} Winner ID if viewing finale or later, else null
+ */
+function filterWinnerByEpisode(winner, targetEpisode = 14, finaleEpisode = 14) {
+    if (!winner) return null;
+    const currentEp = parseInt(targetEpisode) || 14;
+    const finale = parseInt(finaleEpisode) || 14;
+    return currentEp >= finale ? winner : null;
+}
+
+/**
+ * Checks if a contestant is alive (not eliminated) as of a given episode.
+ * @param {string|number} playerId 
+ * @param {Object} eliminationOrder 
+ * @param {number} targetEpisode 
+ * @returns {boolean} True if alive/active as of targetEpisode
+ */
+function isContestantAliveAsOfEpisode(playerId, eliminationOrder = {}, targetEpisode = 14) {
+    if (!eliminationOrder || !playerId) return true;
+    const elimEp = eliminationOrder[playerId] !== undefined ? eliminationOrder[playerId] : eliminationOrder[String(playerId)];
+    if (elimEp === undefined || elimEp === null || elimEp === '') return true;
+    const ep = parseInt(elimEp);
+    if (isNaN(ep)) return true;
+    return ep > (parseInt(targetEpisode) || 14);
+}
+
+/**
+ * Computes status information for all episodes in the season.
+ * @param {Object} scores - Raw scores object
+ * @param {Object} eliminationOrder - Elimination order map
+ * @param {Object} scoredEpisodes - Explicit scored episodes map
+ * @param {number} [totalEpisodes=14] - Total episodes in season
+ * @returns {Object} Episode statuses and metadata
+ */
+function computeEpisodeStatuses(scores = {}, eliminationOrder = {}, scoredEpisodes = {}, totalEpisodes = 14) {
+    const total = parseInt(totalEpisodes) || 14;
+    const episodes = Array.from({ length: total }, (_, i) => i + 1);
+    let latestScoredEpisode = 0;
+    let inProgressEpisode = null;
+    const completedEpisodes = [];
+
+    const statuses = episodes.map(ep => {
+        // State 1: Completed / Voted Out or Explicitly Scored
+        const hasVotedOut = Object.entries(eliminationOrder || {}).some(([playerId, elimEp]) => {
+            return parseInt(elimEp) === ep;
+        });
+        const isExplicitlyScored = Boolean(
+            scoredEpisodes && (scoredEpisodes[ep] || scoredEpisodes[`episode-${ep}`])
+        );
+
+        if (hasVotedOut || isExplicitlyScored) {
+            if (ep > latestScoredEpisode) latestScoredEpisode = ep;
+            completedEpisodes.push(ep);
+            return {
+                ep,
+                status: 'completed',
+                label: 'Completed',
+                icon: '✓',
+                isSelectable: true,
+                count: 0
+            };
+        }
+
+        // State 2: Being Scored / In Progress
+        let hasPoints = false;
+        let pointsCount = 0;
+        Object.values(scores || {}).forEach(playerScores => {
+            if (playerScores && (playerScores[ep] || playerScores[String(ep)])) {
+                const epObj = playerScores[ep] || playerScores[String(ep)];
+                if (typeof epObj === 'object') {
+                    const numScores = Object.keys(epObj).length;
+                    if (numScores > 0) {
+                        hasPoints = true;
+                        pointsCount += numScores;
+                    }
+                }
+            }
+        });
+
+        if (hasPoints) {
+            if (ep > latestScoredEpisode) latestScoredEpisode = ep;
+            if (inProgressEpisode === null) inProgressEpisode = ep;
+            return {
+                ep,
+                status: 'in-progress',
+                label: 'Being Scored',
+                icon: '⚪',
+                isSelectable: true,
+                count: pointsCount
+            };
+        }
+
+        // State 3: Unscored / Not Started
+        return {
+            ep,
+            status: 'unscored',
+            label: 'Unscored',
+            icon: '✗',
+            isSelectable: false,
+            count: 0
+        };
+    });
+
+    return {
+        statuses,
+        latestScoredEpisode,
+        inProgressEpisode,
+        completedEpisodes
+    };
+}
+
 if (typeof window !== 'undefined') {
     window.PRIMARY_COLOR_PALETTES = PRIMARY_COLOR_PALETTES;
     window.getTribeForEpisode = getTribeForEpisode;
@@ -315,5 +485,30 @@ if (typeof window !== 'undefined') {
     window.getSmartDefaultEpisode = getSmartDefaultEpisode;
     window.getTribeStyle = getTribeStyle;
     window.getTribeDotColor = getTribeDotColor;
+    window.filterScoresByEpisode = filterScoresByEpisode;
+    window.filterEliminationsByEpisode = filterEliminationsByEpisode;
+    window.filterWinnerByEpisode = filterWinnerByEpisode;
+    window.isContestantAliveAsOfEpisode = isContestantAliveAsOfEpisode;
+    window.computeEpisodeStatuses = computeEpisodeStatuses;
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        DEFAULT_SCORING_RULES,
+        calculateContestantTotal,
+        calculateUserScore,
+        calculateLeaderboard,
+        PRIMARY_COLOR_PALETTES,
+        getTribeForEpisode,
+        getPlayerTribeProgression,
+        getSmartDefaultEpisode,
+        getTribeStyle,
+        getTribeDotColor,
+        filterScoresByEpisode,
+        filterEliminationsByEpisode,
+        filterWinnerByEpisode,
+        isContestantAliveAsOfEpisode,
+        computeEpisodeStatuses
+    };
 }
 

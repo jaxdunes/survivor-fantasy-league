@@ -14,6 +14,11 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js"></script>
     
+    <!-- App Config & Utilities -->
+    <script src="js/config.js"></script>
+    <script src="js/scoring-engine.js"></script>
+    <script src="js/episode-filter.js"></script>
+    
     <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#f97316">
@@ -57,25 +62,13 @@
     </div>
     
     <script>
-    // Firebase Configuration
-    const firebaseConfig = {
-        apiKey: "AIzaSyAls1zpuUGgNx7xhlpCjF4bDEXp8qfxQ3A",
-        authDomain: "survivorfantasy-cc908.firebaseapp.com",
-        databaseURL: "https://survivorfantasy-cc908-default-rtdb.firebaseio.com/",
-        projectId: "survivorfantasy-cc908",
-        storageBucket: "survivorfantasy-cc908.firebasestorage.app",
-        messagingSenderId: "401357232113",
-        appId: "1:401357232113:web:a9980c49bde38ff981d650"
-    };
-    
     let database, auth;
     let firebaseInitialized = false;
     
     try {
-        firebase.initializeApp(firebaseConfig);
-        database = firebase.database();
+        database = initFirebase();
         auth = firebase.auth();
-        firebaseInitialized = true;
+        firebaseInitialized = window.firebaseInitialized;
         console.log('🔥 Firebase initialized');
     } catch (error) {
         console.error('Firebase error:', error);
@@ -88,7 +81,7 @@
     });
     
     function initializeApp() {
-        const { createElement: h, useState, useEffect, Fragment, useRef } = React;
+        const { createElement: h, useState, useEffect, useMemo, Fragment, useRef } = React;
         
         const createIcon = (svgContent) => {
             return (props) => h('svg', {
@@ -126,6 +119,9 @@
         ];
         
         function ChatApp() {
+            const activeLeagueId = typeof getActiveLeagueId === 'function' ? getActiveLeagueId() : 'jackson-ryan-league';
+            const activeSeasonId = typeof getActiveSeasonId === 'function' ? getActiveSeasonId(activeLeagueId) : 'season-51';
+
             const [user, setUser] = useState(null);
             const [loading, setLoading] = useState(true);
             const [showLogin, setShowLogin] = useState(false);
@@ -143,6 +139,120 @@
             const [regEmail, setRegEmail] = useState('');
             const [teamSelect, setTeamSelect] = useState('');
             const messagesEndRef = useRef(null);
+
+            const [scores, setScores] = useState({});
+            const [eliminationOrder, setEliminationOrder] = useState({});
+            const [scoredEpisodes, setScoredEpisodes] = useState([]);
+
+            const [catchUpState, setCatchUpStateLocal] = useState(() => {
+                return window.SurvivorEpisodeFilter ? window.SurvivorEpisodeFilter.getCatchUpState(activeSeasonId) : null;
+            });
+            const [pendingConfirmEpisode, setPendingConfirmEpisode] = useState(null);
+            const [pendingIsInProgress, setPendingIsInProgress] = useState(false);
+            const [pendingChatEntry, setPendingChatEntry] = useState(false);
+
+            // Load episode scores and elimination order for tracker
+            useEffect(() => {
+                if (!firebaseInitialized || !database) return;
+                const seasonBasePath = `leagues/${activeLeagueId}/seasons/${activeSeasonId}`;
+                const scoresRef = database.ref(`${seasonBasePath}/scores`);
+                const elimRef = database.ref(`${seasonBasePath}/eliminationOrder`);
+                const scoredRef = database.ref(`${seasonBasePath}/scoredEpisodes`);
+
+                const handleScores = (snap) => setScores(snap.val() || {});
+                const handleElim = (snap) => setEliminationOrder(snap.val() || {});
+                const handleScored = (snap) => {
+                    const val = snap.val();
+                    if (Array.isArray(val)) setScoredEpisodes(val);
+                    else if (val && typeof val === 'object') setScoredEpisodes(Object.keys(val).map(Number));
+                    else setScoredEpisodes([]);
+                };
+
+                scoresRef.on('value', handleScores);
+                elimRef.on('value', handleElim);
+                scoredRef.on('value', handleScored);
+
+                return () => {
+                    scoresRef.off('value', handleScores);
+                    elimRef.off('value', handleElim);
+                    scoredRef.off('value', handleScored);
+                };
+            }, [activeLeagueId, activeSeasonId]);
+
+            const episodeMeta = useMemo(() => {
+                if (typeof window.computeEpisodeStatuses === 'function') {
+                    return window.computeEpisodeStatuses(scores, eliminationOrder, scoredEpisodes, 14);
+                }
+                return { statuses: [], latestScoredEpisode: 0, inProgressEpisode: null, completedEpisodes: [] };
+            }, [scores, eliminationOrder, scoredEpisodes]);
+
+            const viewingEpisode = useMemo(() => {
+                if (catchUpState && catchUpState.viewingEpisode) {
+                    return catchUpState.viewingEpisode;
+                }
+                return episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
+            }, [catchUpState, episodeMeta]);
+
+            const maxWatchedEpisode = useMemo(() => {
+                if (catchUpState && catchUpState.maxWatchedEpisode) {
+                    return catchUpState.maxWatchedEpisode;
+                }
+                return episodeMeta.latestScoredEpisode || 1;
+            }, [catchUpState, episodeMeta]);
+
+            useEffect(() => {
+                const handleFilterChange = (e) => {
+                    if (e.detail && e.detail.seasonId === activeSeasonId) {
+                        setCatchUpStateLocal(e.detail.state);
+                    }
+                };
+                const handleStorageChange = (e) => {
+                    if (e.key === `survivor_catchup_${activeSeasonId}` && e.newValue) {
+                        try {
+                            setCatchUpStateLocal(JSON.parse(e.newValue));
+                        } catch (err) {}
+                    }
+                };
+                window.addEventListener('episodeFilterChanged', handleFilterChange);
+                window.addEventListener('storage', handleStorageChange);
+                return () => {
+                    window.removeEventListener('episodeFilterChanged', handleFilterChange);
+                    window.removeEventListener('storage', handleStorageChange);
+                };
+            }, [activeSeasonId]);
+
+            const handleSelectEpisode = (ep, isInProgress) => {
+                const epNum = parseInt(ep);
+                if (epNum <= maxWatchedEpisode) {
+                    const liveEp = episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
+                    const newState = {
+                        maxWatchedEpisode: maxWatchedEpisode,
+                        viewingEpisode: epNum,
+                        latestScoredEpisodeAtChoice: liveEp,
+                        isLiveStreaming: isInProgress && epNum === episodeMeta.inProgressEpisode
+                    };
+                    if (window.SurvivorEpisodeFilter) {
+                        window.SurvivorEpisodeFilter.setCatchUpState(activeSeasonId, newState);
+                    }
+                    setCatchUpStateLocal(newState);
+                } else {
+                    setPendingConfirmEpisode(epNum);
+                    setPendingIsInProgress(Boolean(isInProgress));
+                    setPendingChatEntry(false);
+                }
+            };
+
+            const handleConfirmJumpToLive = () => {
+                const liveEp = episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
+                const isInProgress = Boolean(episodeMeta.inProgressEpisode);
+                if (liveEp > maxWatchedEpisode) {
+                    setPendingConfirmEpisode(liveEp);
+                    setPendingIsInProgress(isInProgress);
+                    setPendingChatEntry(false);
+                } else {
+                    handleSelectEpisode(liveEp, isInProgress);
+                }
+            };
             
             // Check auth state
             useEffect(() => {
@@ -513,19 +623,23 @@
                                 ),
                                 h('div', { className: 'flex gap-3 items-center flex-wrap justify-end' },
                                     h('a', {
-                                        href: 'index.html',
-                                        className: 'px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition flex items-center gap-2'
+                                        href: `index.html?league=${activeLeagueId}&season=${activeSeasonId}`,
+                                        className: 'px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition flex items-center gap-2 font-bold'
                                     },
                                         h(Icons.Home, { size: 18 }),
-                                        'Draft'
+                                        'Leaderboard'
                                     ),
                                     h('a', {
+                                        href: `draft.html?league=${activeLeagueId}&season=${activeSeasonId}`,
+                                        className: 'px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition flex items-center gap-2 font-bold'
+                                    }, '📋 Draft'),
+                                    h('a', {
                                         href: 'notifications.html',
-                                        className: 'px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2'
+                                        className: 'px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2 font-bold'
                                     }, '🔔 Notifications'),
                                     h('button', {
                                         onClick: handleLogout,
-                                        className: 'px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition flex items-center gap-2'
+                                        className: 'px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition flex items-center gap-2 font-bold'
                                     },
                                         h(Icons.LogOut, { size: 18 }),
                                         'Logout'
@@ -533,6 +647,25 @@
                                 )
                             )
                         ),
+
+                        // Universal Episode Catch-Up & Spoiler Protection Tracker
+                        window.SurvivorEpisodeFilter && h(window.SurvivorEpisodeFilter.UniversalEpisodeTracker, {
+                            viewingEpisode: viewingEpisode,
+                            maxWatchedEpisode: maxWatchedEpisode,
+                            latestScoredEpisode: episodeMeta.latestScoredEpisode,
+                            inProgressEpisode: episodeMeta.inProgressEpisode,
+                            episodeStatuses: episodeMeta.statuses,
+                            theme: 'default',
+                            onSelectEpisode: handleSelectEpisode
+                        }),
+
+                        // Historical Status Banner
+                        window.SurvivorEpisodeFilter && h(window.SurvivorEpisodeFilter.HistoricalStatusBanner, {
+                            viewingEpisode: viewingEpisode,
+                            latestScoredEpisode: episodeMeta.latestScoredEpisode,
+                            inProgressEpisode: episodeMeta.inProgressEpisode,
+                            onJumpToLive: handleConfirmJumpToLive
+                        }),
                         
                         // Episode selection
                         h('div', { className: 'bg-white/95 backdrop-blur-md rounded-2xl p-6 shadow-xl' },
@@ -560,22 +693,30 @@
                                             h('div', { className: 'flex gap-2' },
                                                 !isWatched && h('button', {
                                                     onClick: () => markEpisodeWatched(episode),
-                                                    className: 'px-3 py-1 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600 transition flex items-center gap-1'
+                                                    className: 'px-3 py-1 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600 transition flex items-center gap-1 cursor-pointer'
                                                 },
                                                     h(Icons.Eye, { size: 14 }),
                                                     'Watched'
                                                 ),
                                                 isWatched && h(Fragment, {},
                                                     h('button', {
-                                                        onClick: () => setSelectedEpisode(episode),
-                                                        className: 'px-3 py-1 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-lg text-sm hover:shadow-lg transition flex items-center gap-1'
+                                                        onClick: () => {
+                                                            if (episode > maxWatchedEpisode) {
+                                                                setPendingConfirmEpisode(episode);
+                                                                setPendingIsInProgress(episode === episodeMeta.inProgressEpisode);
+                                                                setPendingChatEntry(true);
+                                                            } else {
+                                                                setSelectedEpisode(episode);
+                                                            }
+                                                        },
+                                                        className: 'px-3 py-1 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-lg text-sm hover:shadow-lg transition flex items-center gap-1 cursor-pointer'
                                                     },
                                                         h(Icons.MessageCircle, { size: 14 }),
                                                         'Chat'
                                                     ),
                                                     h('button', {
                                                         onClick: () => unmarkEpisodeWatched(episode),
-                                                        className: 'px-3 py-1 bg-gray-400 text-white rounded-lg text-sm hover:bg-gray-500 transition flex items-center gap-1'
+                                                        className: 'px-3 py-1 bg-gray-400 text-white rounded-lg text-sm hover:bg-gray-500 transition flex items-center gap-1 cursor-pointer'
                                                     },
                                                         h(Icons.X, { size: 14 }),
                                                         'Unmark'
@@ -586,7 +727,36 @@
                                     );
                                 })
                             )
-                        )
+                        ),
+
+                        // Spoiler Warning Confirmation Modal
+                        window.SurvivorEpisodeFilter && h(window.SurvivorEpisodeFilter.SpoilerConfirmModal, {
+                            isOpen: Boolean(pendingConfirmEpisode),
+                            targetEpisode: pendingConfirmEpisode,
+                            isTargetInProgress: pendingIsInProgress,
+                            onConfirm: () => {
+                                const liveEp = episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
+                                const newState = {
+                                    maxWatchedEpisode: Math.max(maxWatchedEpisode, pendingConfirmEpisode),
+                                    viewingEpisode: pendingConfirmEpisode,
+                                    latestScoredEpisodeAtChoice: liveEp,
+                                    isLiveStreaming: pendingIsInProgress && pendingConfirmEpisode === episodeMeta.inProgressEpisode
+                                };
+                                if (window.SurvivorEpisodeFilter) {
+                                    window.SurvivorEpisodeFilter.setCatchUpState(activeSeasonId, newState);
+                                }
+                                setCatchUpStateLocal(newState);
+                                if (pendingChatEntry) {
+                                    setSelectedEpisode(pendingConfirmEpisode);
+                                    setPendingChatEntry(false);
+                                }
+                                setPendingConfirmEpisode(null);
+                            },
+                            onCancel: () => {
+                                setPendingConfirmEpisode(null);
+                                setPendingChatEntry(false);
+                            }
+                        })
                     )
                 );
             }
@@ -606,12 +776,43 @@
                                     `${messages.length} messages • Spoiler-free zone`
                                 )
                             ),
-                            h('button', {
-                                onClick: () => setSelectedEpisode(null),
-                                className: 'px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition'
-                            }, '← Back')
+                            h('div', { className: 'flex items-center gap-2' },
+                                h('a', {
+                                    href: `index.html?league=${activeLeagueId}&season=${activeSeasonId}`,
+                                    className: 'px-3 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition text-sm font-bold'
+                                }, 'Leaderboard'),
+                                h('button', {
+                                    onClick: () => setSelectedEpisode(null),
+                                    className: 'px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition text-sm font-bold cursor-pointer'
+                                }, '← Back')
+                            )
                         )
                     ),
+
+                    // Universal Episode Catch-Up & Spoiler Protection Tracker
+                    window.SurvivorEpisodeFilter && h(window.SurvivorEpisodeFilter.UniversalEpisodeTracker, {
+                        viewingEpisode: viewingEpisode,
+                        maxWatchedEpisode: maxWatchedEpisode,
+                        latestScoredEpisode: episodeMeta.latestScoredEpisode,
+                        inProgressEpisode: episodeMeta.inProgressEpisode,
+                        episodeStatuses: episodeMeta.statuses,
+                        theme: 'default',
+                        onSelectEpisode: handleSelectEpisode
+                    }),
+
+                    // Historical Status Banner
+                    window.SurvivorEpisodeFilter && h(window.SurvivorEpisodeFilter.HistoricalStatusBanner, {
+                        viewingEpisode: viewingEpisode,
+                        latestScoredEpisode: episodeMeta.latestScoredEpisode,
+                        inProgressEpisode: episodeMeta.inProgressEpisode,
+                        onJumpToLive: handleConfirmJumpToLive
+                    }),
+
+                    // Chat Spoiler Advisory Banner (if in room ahead of viewingEpisode)
+                    selectedEpisode > viewingEpisode && window.SurvivorEpisodeFilter && h(window.SurvivorEpisodeFilter.ChatSpoilerAdvisoryBanner, {
+                        viewingEpisode: viewingEpisode,
+                        chatEpisode: selectedEpisode
+                    }),
                     
                     // Chat messages
                     h('div', { className: 'bg-white/95 backdrop-blur-md rounded-2xl shadow-xl chat-container' },
@@ -665,7 +866,36 @@
                                 )
                             )
                         )
-                    )
+                    ),
+
+                    // Spoiler Warning Confirmation Modal
+                    window.SurvivorEpisodeFilter && h(window.SurvivorEpisodeFilter.SpoilerConfirmModal, {
+                        isOpen: Boolean(pendingConfirmEpisode),
+                        targetEpisode: pendingConfirmEpisode,
+                        isTargetInProgress: pendingIsInProgress,
+                        onConfirm: () => {
+                            const liveEp = episodeMeta.inProgressEpisode || episodeMeta.latestScoredEpisode || 1;
+                            const newState = {
+                                maxWatchedEpisode: Math.max(maxWatchedEpisode, pendingConfirmEpisode),
+                                viewingEpisode: pendingConfirmEpisode,
+                                latestScoredEpisodeAtChoice: liveEp,
+                                isLiveStreaming: pendingIsInProgress && pendingConfirmEpisode === episodeMeta.inProgressEpisode
+                            };
+                            if (window.SurvivorEpisodeFilter) {
+                                window.SurvivorEpisodeFilter.setCatchUpState(activeSeasonId, newState);
+                            }
+                            setCatchUpStateLocal(newState);
+                            if (pendingChatEntry) {
+                                setSelectedEpisode(pendingConfirmEpisode);
+                                setPendingChatEntry(false);
+                            }
+                            setPendingConfirmEpisode(null);
+                        },
+                        onCancel: () => {
+                            setPendingConfirmEpisode(null);
+                            setPendingChatEntry(false);
+                        }
+                    })
                 )
             );
         }
