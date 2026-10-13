@@ -20,10 +20,10 @@ Inside the expanded team view on the leaderboard, the **Episode & Player Event B
 
 ### 1.2 Core Objective
 Re-engineer the **Episode & Player Event Breakdown** so that:
-- On **hover** (desktop) or **tap** (mobile & desktop), the UI displays **all scoring events for that contestant in the selected episode** in an organized, beautiful card list.
+- On **hover** (desktop preview) or **click / tap** (desktop & mobile lock), the UI displays **all scoring events for that contestant in the selected episode** in an organized, beautiful card list.
+- Clicking or tapping a contestant locks that contestant's complete event breakdown until explicitly clicked/tapped again to un-select ("untap"), clicking another contestant, or clicking "✕ Show All Team".
 - When no contestant is selected (or when "All Team Events" is active), the component displays **all scoring events across the entire team for that episode**.
-- Touch interactions on mobile are **sticky**: tapping a contestant locks that contestant's complete event breakdown until explicitly tapped again ("untapped") or until another contestant is tapped.
-- The entire contestant column (bars, labels, and contestant name) functions as a generous, responsive hit target.
+- The entire contestant column (bars, labels, and contestant name) functions as a generous, responsive hit target with visual focus and dimming.
 
 ---
 
