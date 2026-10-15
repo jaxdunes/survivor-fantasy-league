@@ -2845,7 +2845,7 @@
                                                     h('span', {}, tribeName)
                                                 ),
                                                 h('div', { className: 'flex items-center gap-1.5' },
-                                                    tribeName !== 'Unassigned' && h('button', {
+                                                    (!isMerge && tribeName !== 'Unassigned' && !isMergeName(tribeName)) && h('button', {
                                                         type: 'button',
                                                         onClick: (e) => {
                                                             e.stopPropagation();
