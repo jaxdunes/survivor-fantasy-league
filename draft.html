@@ -7,7 +7,7 @@
     <title>Draft Board - Survivor 51 Fantasy League</title>
     <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/tailwind.min.css?v=2">
     
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -21,6 +21,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Survivor 51">
     
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
     <style>
         html {
@@ -307,8 +309,6 @@
     <script src="js/episode-filter.js"></script>
     <script src="js/api.js"></script>
     
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
     <script>
     // Initialize Firebase via config module
     const database = initFirebase();
@@ -317,11 +317,11 @@
     const activeLeagueId = getActiveLeagueId();
     const activeSeasonId = getActiveSeasonId();
     
-    window.addEventListener('load', function() {
-        setTimeout(function() {
-            initializeApp();
-        }, 500);
-    });
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    } else {
+        initializeApp();
+    }
     
     const LEAGUES_DATA = (typeof AVAILABLE_LEAGUES !== 'undefined' ? AVAILABLE_LEAGUES : window.AVAILABLE_LEAGUES) || {
         'jackson-ryan-league': {
@@ -440,8 +440,18 @@
             const seasonConfig = (currentLeagueConfig.seasons || []).find(s => s.id === activeSeasonId) || {};
             const teams = seasonConfig.teams || currentLeagueConfig.teams;
             
-            const [playerTeams, setPlayerTeams] = useState({});
-            const [seasonData, setSeasonData] = useState(null);
+            const [playerTeams, setPlayerTeams] = useState(() => {
+                try {
+                    const s = localStorage.getItem(`survivor-teams-${activeLeagueId}-${activeSeasonId}`);
+                    return s ? JSON.parse(s) : {};
+                } catch(e) { return {}; }
+            });
+            const [seasonData, setSeasonData] = useState(() => {
+                try {
+                    const s = localStorage.getItem(`survivor-seasonData-${activeSeasonId}`);
+                    return s ? JSON.parse(s) : null;
+                } catch(e) { return null; }
+            });
             const [searchTerm, setSearchTerm] = useState('');
             const [filterEra, setFilterEra] = useState('all');
             const [filterTribe, setFilterTribe] = useState('all');
@@ -456,18 +466,24 @@
             const [theme, setTheme] = useState(() => localStorage.getItem('survivor_theme') || 'tribal');
 
             // Draft Upgrade State Machine & Settings
-            const [draftState, setDraftState] = useState({
-                status: 'closed',
-                style: 'snake',
-                orderType: 'random',
-                backfillEnabled: true,
-                currentRound: 1,
-                currentPick: 1,
-                lastPickTimestamp: Date.now(),
-                onTheClockTeamId: null,
-                orderSequence: [],
-                budgets: {},
-                backfilledPlayers: {}
+            const [draftState, setDraftState] = useState(() => {
+                const defaultState = {
+                    status: 'closed',
+                    style: 'snake',
+                    orderType: 'random',
+                    backfillEnabled: true,
+                    currentRound: 1,
+                    currentPick: 1,
+                    lastPickTimestamp: Date.now(),
+                    onTheClockTeamId: null,
+                    orderSequence: [],
+                    budgets: {},
+                    backfilledPlayers: {}
+                };
+                try {
+                    const saved = localStorage.getItem(`survivor-draftState-${activeLeagueId}-${activeSeasonId}`);
+                    return saved ? { ...defaultState, ...JSON.parse(saved) } : defaultState;
+                } catch(e) { return defaultState; }
             });
             const [showSettingsModal, setShowSettingsModal] = useState(false);
             const [showSafetyResetModal, setShowSafetyResetModal] = useState(false);
@@ -477,9 +493,24 @@
             const [auctionHighBidder, setAuctionHighBidder] = useState(null);
             const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-            const [scores, setScores] = useState({});
-            const [eliminationOrder, setEliminationOrder] = useState({});
-            const [scoredEpisodes, setScoredEpisodes] = useState({});
+            const [scores, setScores] = useState(() => {
+                try {
+                    const saved = localStorage.getItem(`survivor-scores-${activeLeagueId}-${activeSeasonId}`);
+                    return saved ? JSON.parse(saved) : {};
+                } catch(e) { return {}; }
+            });
+            const [eliminationOrder, setEliminationOrder] = useState(() => {
+                try {
+                    const saved = localStorage.getItem(`survivor-eliminationOrder-${activeLeagueId}-${activeSeasonId}`);
+                    return saved ? JSON.parse(saved) : {};
+                } catch(e) { return {}; }
+            });
+            const [scoredEpisodes, setScoredEpisodes] = useState(() => {
+                try {
+                    const saved = localStorage.getItem(`survivor-scoredEpisodes-${activeLeagueId}-${activeSeasonId}`);
+                    return saved ? JSON.parse(saved) : {};
+                } catch(e) { return {}; }
+            });
             const [currentEpisode, setCurrentEpisode] = useState(1);
 
             // Tribe Management State
@@ -514,9 +545,21 @@
                 const scoredRef = database.ref(`${seasonBasePath}/scoredEpisodes`);
                 const currEpRef = database.ref('currentEpisode');
 
-                scoresRef.on('value', (snap) => setScores(snap.val() || {}));
-                elimRef.on('value', (snap) => setEliminationOrder(snap.val() || {}));
-                scoredRef.on('value', (snap) => setScoredEpisodes(snap.val() || {}));
+                scoresRef.on('value', (snap) => {
+                    const val = snap.val() || {};
+                    setScores(val);
+                    try { localStorage.setItem(`survivor-scores-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(val)); } catch(e) {}
+                });
+                elimRef.on('value', (snap) => {
+                    const val = snap.val() || {};
+                    setEliminationOrder(val);
+                    try { localStorage.setItem(`survivor-eliminationOrder-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(val)); } catch(e) {}
+                });
+                scoredRef.on('value', (snap) => {
+                    const val = snap.val() || {};
+                    setScoredEpisodes(val);
+                    try { localStorage.setItem(`survivor-scoredEpisodes-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(val)); } catch(e) {}
+                });
                 currEpRef.on('value', (snap) => setCurrentEpisode(snap.val() || 1));
 
                 return () => {
@@ -550,62 +593,54 @@
                 let seasonRef;
                 const savedLocal = localStorage.getItem(`survivor-seasonData-${activeSeasonId}`);
                 const localData = savedLocal ? JSON.parse(savedLocal) : null;
+                let currentPreset = null;
+                let currentFbSeason = null;
 
-                fetch('seasons/' + activeSeasonId + '.json?t=' + Date.now())
+                const applyMergedSeason = () => {
+                    const preset = currentPreset || {};
+                    const fb = currentFbSeason || {};
+                    const activeContestants = (fb.contestants && ensureArray(fb.contestants).length > 0)
+                        ? ensureArray(fb.contestants)
+                        : ((localData?.contestants && ensureArray(localData.contestants).length > 0)
+                            ? ensureArray(localData.contestants)
+                            : ensureArray(preset.contestants));
+
+                    const activeCustom = (fb.customTribes && ensureArray(fb.customTribes).length > 0)
+                        ? ensureArray(fb.customTribes)
+                        : ((localData?.customTribes && ensureArray(localData.customTribes).length > 0)
+                            ? ensureArray(localData.customTribes)
+                            : ensureArray(preset.customTribes));
+
+                    setSeasonData(prev => {
+                        const merged = {
+                            ...preset,
+                            ...localData,
+                            ...fb,
+                            contestants: activeContestants.length > 0 ? activeContestants : (prev?.contestants || []),
+                            customTribes: activeCustom.length > 0 ? activeCustom : (prev?.customTribes || [])
+                        };
+                        try { localStorage.setItem(`survivor-seasonData-${activeSeasonId}`, JSON.stringify(merged)); } catch(e) {}
+                        return merged;
+                    });
+                };
+
+                fetch('seasons/' + activeSeasonId + '.json')
                     .then(res => res.json())
                     .then(presetData => {
-                        const initialContestants = (localData?.contestants && ensureArray(localData.contestants).length > 0)
-                            ? ensureArray(localData.contestants)
-                            : ensureArray(presetData.contestants);
-                        const initialCustom = (localData?.customTribes && ensureArray(localData.customTribes).length > 0)
-                            ? ensureArray(localData.customTribes)
-                            : ensureArray(presetData.customTribes);
-
-                        setSeasonData(prev => {
-                            if (prev) return prev;
-                            return {
-                                ...presetData,
-                                ...localData,
-                                contestants: initialContestants,
-                                customTribes: initialCustom
-                            };
-                        });
-
-                        if (window.firebaseInitialized) {
-                            seasonRef = database.ref(`seasons/${activeSeasonId}`);
-                            seasonRef.on('value', (snap) => {
-                                if (snap.exists()) {
-                                    const fbSeason = snap.val() || {};
-                                    const fbContestants = fbSeason.contestants ? ensureArray(fbSeason.contestants) : null;
-                                    const fbCustom = fbSeason.customTribes ? ensureArray(fbSeason.customTribes) : null;
-
-                                    setSeasonData(prev => {
-                                        const activeContestants = (fbContestants && fbContestants.length > 0)
-                                            ? fbContestants
-                                            : ((localData?.contestants && ensureArray(localData.contestants).length > 0)
-                                                ? ensureArray(localData.contestants)
-                                                : (prev?.contestants && prev.contestants.length > 0 ? prev.contestants : ensureArray(presetData.contestants)));
-
-                                        const activeCustom = (fbCustom && fbCustom.length > 0)
-                                            ? fbCustom
-                                            : ((localData?.customTribes && ensureArray(localData.customTribes).length > 0)
-                                                ? ensureArray(localData.customTribes)
-                                                : (prev?.customTribes && prev.customTribes.length > 0 ? prev.customTribes : ensureArray(presetData.customTribes)));
-
-                                        const mergedData = {
-                                            ...presetData,
-                                            ...fbSeason,
-                                            contestants: activeContestants,
-                                            customTribes: activeCustom
-                                        };
-                                        localStorage.setItem(`survivor-seasonData-${activeSeasonId}`, JSON.stringify(mergedData));
-                                        return mergedData;
-                                    });
-                                }
-                            });
-                        }
+                        currentPreset = presetData;
+                        applyMergedSeason();
                     })
                     .catch(err => console.warn('Could not load season json, using fallback.', err));
+
+                if (window.firebaseInitialized) {
+                    seasonRef = database.ref(`seasons/${activeSeasonId}`);
+                    seasonRef.on('value', (snap) => {
+                        if (snap.exists()) {
+                            currentFbSeason = snap.val() || {};
+                            applyMergedSeason();
+                        }
+                    });
+                }
 
                 return () => {
                     if (seasonRef) seasonRef.off();
@@ -1207,6 +1242,7 @@
                 const unsubscribe = api.subscribeDraftState(activeLeagueId, activeSeasonId, (data) => {
                     if (data) {
                         setDraftState(data);
+                        try { localStorage.setItem(`survivor-draftState-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(data)); } catch(e) {}
                     } else {
                         const initialOrder = teams.map(t => t.id);
                         const initialBudgets = teams.reduce((acc, t) => ({ ...acc, [t.id]: 100 }), {});
@@ -1272,11 +1308,20 @@
                     const data = snapshot.val();
                     if (data) {
                         setPlayerTeams(data);
+                        try { localStorage.setItem(`survivor-teams-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(data)); } catch(e) {}
                     } else if (activeLeagueId === 'jackson-ryan-league' && activeSeasonId === 'season-50') {
                         // Legacy fallback for Season 50 in main league
                         database.ref('leagues/jackson-ryan-league/teams').once('value').then(snap => {
-                            if (snap.val()) setPlayerTeams(snap.val());
-                            else database.ref('teams').once('value').then(legacySnap => setPlayerTeams(legacySnap.val() || {}));
+                            if (snap.val()) {
+                                setPlayerTeams(snap.val());
+                                try { localStorage.setItem(`survivor-teams-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(snap.val())); } catch(e) {}
+                            } else {
+                                database.ref('teams').once('value').then(legacySnap => {
+                                    const legVal = legacySnap.val() || {};
+                                    setPlayerTeams(legVal);
+                                    try { localStorage.setItem(`survivor-teams-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(legVal)); } catch(e) {}
+                                });
+                            }
                         });
                     } else {
                         setPlayerTeams({});
@@ -2422,7 +2467,7 @@
                         // Side Menu Sidebar Panel
                         h('aside', {
                             className: `fixed top-0 left-0 bottom-0 w-80 max-w-[85vw] bg-slate-900 text-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col justify-between overflow-y-auto border-r border-slate-800 ${
-                                showSideMenu ? 'translate-x-0' : '-translate-x-full'
+                                showSideMenu ? 'translate-x-0' : '-translate-x-full pointer-events-none'
                             }`
                         },
                             h('div', { className: 'p-6 pt-safe pb-safe' },

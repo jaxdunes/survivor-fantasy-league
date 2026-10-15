@@ -7,7 +7,7 @@
     <title>Fantasy Survivor League</title>
     <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="css/tailwind.min.css?v=2">
     
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -22,7 +22,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Fantasy Survivor">
     
-    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@600;700&family=Permanent+Marker&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@700&display=swap" rel="stylesheet">
     <script>
     window.onerror = function(msg, url, lineNo, columnNo, error) {
         var errorDetails = (error && error.stack) ? error.stack : (msg + ' at ' + url + ':' + lineNo + ':' + columnNo);
@@ -452,8 +454,6 @@
     <script src="js/episode-filter.js"></script>
     <script src="js/api.js"></script>
     
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
     <script>
     const database = initFirebase();
     var firebaseInitialized = window.firebaseInitialized;
@@ -461,11 +461,11 @@
     const activeLeagueId = getActiveLeagueId();
     const activeSeasonId = getActiveSeasonId();
     
-    window.addEventListener('load', function() {
-        setTimeout(function() {
-            initializeApp();
-        }, 500);
-    });
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    } else {
+        initializeApp();
+    }
     
     const LEAGUES_DATA = (typeof AVAILABLE_LEAGUES !== 'undefined' ? AVAILABLE_LEAGUES : window.AVAILABLE_LEAGUES) || {
         'jackson-ryan-league': {
@@ -2200,12 +2200,42 @@
                 { id: 'runner-up', name: 'Runner-ups', points: 25, category: 'End of Season' }
             ];
             
-            const [playerTeams, setPlayerTeams] = useState({});
-            const [seasonData, setSeasonData] = useState(null);
-            const [scores, setScores] = useState({});
-            const [eliminationOrder, setEliminationOrder] = useState({});
-            const [scoredEpisodes, setScoredEpisodes] = useState({});
-            const [winner, setWinner] = useState(null); // Single winner ID
+            const [playerTeams, setPlayerTeams] = useState(() => {
+                try {
+                    const s = localStorage.getItem(`survivor-teams-${activeLeagueId}-${activeSeasonId}`);
+                    return s ? JSON.parse(s) : {};
+                } catch(e) { return {}; }
+            });
+            const [seasonData, setSeasonData] = useState(() => {
+                try {
+                    const s = localStorage.getItem(`survivor-seasonData-${activeSeasonId}`);
+                    return s ? JSON.parse(s) : null;
+                } catch(e) { return null; }
+            });
+            const [scores, setScores] = useState(() => {
+                try {
+                    const s = localStorage.getItem(`survivor-scores-${activeLeagueId}-${activeSeasonId}`);
+                    return s ? JSON.parse(s) : {};
+                } catch(e) { return {}; }
+            });
+            const [eliminationOrder, setEliminationOrder] = useState(() => {
+                try {
+                    const s = localStorage.getItem(`survivor-eliminationOrder-${activeLeagueId}-${activeSeasonId}`);
+                    return s ? JSON.parse(s) : {};
+                } catch(e) { return {}; }
+            });
+            const [scoredEpisodes, setScoredEpisodes] = useState(() => {
+                try {
+                    const s = localStorage.getItem(`survivor-scoredEpisodes-${activeLeagueId}-${activeSeasonId}`);
+                    return s ? JSON.parse(s) : {};
+                } catch(e) { return {}; }
+            });
+            const [winner, setWinner] = useState(() => {
+                try {
+                    const s = localStorage.getItem(`survivor-winner-${activeLeagueId}-${activeSeasonId}`);
+                    return s ? JSON.parse(s) : null;
+                } catch(e) { return null; }
+            });
             const [currentEpisode, setCurrentEpisode] = useState(1);
             const [lastSelectedEpisode, setLastSelectedEpisode] = useState(() => localStorage.getItem('survivor_last_selected_episode') || '1');
             const [catchUpState, setCatchUpStateLocal] = useState(() => {
@@ -2302,62 +2332,54 @@
                 let seasonRef;
                 const savedLocal = localStorage.getItem(`survivor-seasonData-${activeSeasonId}`);
                 const localData = savedLocal ? JSON.parse(savedLocal) : null;
+                let currentPreset = null;
+                let currentFbSeason = null;
 
-                fetch('seasons/' + activeSeasonId + '.json?t=' + Date.now())
+                const applyMergedSeason = () => {
+                    const preset = currentPreset || {};
+                    const fb = currentFbSeason || {};
+                    const activeContestants = (fb.contestants && ensureArray(fb.contestants).length > 0)
+                        ? ensureArray(fb.contestants)
+                        : ((localData?.contestants && ensureArray(localData.contestants).length > 0)
+                            ? ensureArray(localData.contestants)
+                            : ensureArray(preset.contestants));
+
+                    const activeCustom = (fb.customTribes && ensureArray(fb.customTribes).length > 0)
+                        ? ensureArray(fb.customTribes)
+                        : ((localData?.customTribes && ensureArray(localData.customTribes).length > 0)
+                            ? ensureArray(localData.customTribes)
+                            : ensureArray(preset.customTribes));
+
+                    setSeasonData(prev => {
+                        const merged = {
+                            ...preset,
+                            ...localData,
+                            ...fb,
+                            contestants: activeContestants.length > 0 ? activeContestants : (prev?.contestants || []),
+                            customTribes: activeCustom.length > 0 ? activeCustom : (prev?.customTribes || [])
+                        };
+                        try { localStorage.setItem(`survivor-seasonData-${activeSeasonId}`, JSON.stringify(merged)); } catch(e) {}
+                        return merged;
+                    });
+                };
+
+                fetch('seasons/' + activeSeasonId + '.json')
                     .then(res => res.json())
                     .then(presetData => {
-                        const initialContestants = (localData?.contestants && ensureArray(localData.contestants).length > 0)
-                            ? ensureArray(localData.contestants)
-                            : ensureArray(presetData.contestants);
-                        const initialCustom = (localData?.customTribes && ensureArray(localData.customTribes).length > 0)
-                            ? ensureArray(localData.customTribes)
-                            : ensureArray(presetData.customTribes);
-
-                        setSeasonData(prev => {
-                            if (prev) return prev;
-                            return {
-                                ...presetData,
-                                ...localData,
-                                contestants: initialContestants,
-                                customTribes: initialCustom
-                            };
-                        });
-
-                        if (window.firebaseInitialized) {
-                            seasonRef = database.ref(`seasons/${activeSeasonId}`);
-                            seasonRef.on('value', (snap) => {
-                                if (snap.exists()) {
-                                    const fbSeason = snap.val() || {};
-                                    const fbContestants = fbSeason.contestants ? ensureArray(fbSeason.contestants) : null;
-                                    const fbCustom = fbSeason.customTribes ? ensureArray(fbSeason.customTribes) : null;
-
-                                    setSeasonData(prev => {
-                                        const activeContestants = (fbContestants && fbContestants.length > 0)
-                                            ? fbContestants
-                                            : ((localData?.contestants && ensureArray(localData.contestants).length > 0)
-                                                ? ensureArray(localData.contestants)
-                                                : (prev?.contestants && prev.contestants.length > 0 ? prev.contestants : ensureArray(presetData.contestants)));
-
-                                        const activeCustom = (fbCustom && fbCustom.length > 0)
-                                            ? fbCustom
-                                            : ((localData?.customTribes && ensureArray(localData.customTribes).length > 0)
-                                                ? ensureArray(localData.customTribes)
-                                                : (prev?.customTribes && prev.customTribes.length > 0 ? prev.customTribes : ensureArray(presetData.customTribes)));
-
-                                        const mergedData = {
-                                            ...presetData,
-                                            ...fbSeason,
-                                            contestants: activeContestants,
-                                            customTribes: activeCustom
-                                        };
-                                        localStorage.setItem(`survivor-seasonData-${activeSeasonId}`, JSON.stringify(mergedData));
-                                        return mergedData;
-                                    });
-                                }
-                            });
-                        }
+                        currentPreset = presetData;
+                        applyMergedSeason();
                     })
                     .catch(err => console.warn('Could not load season json in scoring', err));
+
+                if (window.firebaseInitialized) {
+                    seasonRef = database.ref(`seasons/${activeSeasonId}`);
+                    seasonRef.on('value', (snap) => {
+                        if (snap.exists()) {
+                            currentFbSeason = snap.val() || {};
+                            applyMergedSeason();
+                        }
+                    });
+                }
 
                 return () => {
                     if (seasonRef) seasonRef.off();
@@ -2760,7 +2782,12 @@
                 setShowBulkEditModal(false);
             };
 
-            const [draftState, setDraftState] = useState({});
+            const [draftState, setDraftState] = useState(() => {
+                try {
+                    const savedDS = localStorage.getItem(`survivor-draftState-${activeLeagueId}-${activeSeasonId}`);
+                    return savedDS ? JSON.parse(savedDS) : {};
+                } catch(e) { return {}; }
+            });
 
             // Load draftState from Firebase / localStorage
             useEffect(() => {
@@ -2771,7 +2798,9 @@
                 }
                 const dsRef = database.ref(`leagues/${activeLeagueId}/seasons/${activeSeasonId}/draftState`);
                 dsRef.on('value', (snap) => {
-                    setDraftState(snap.val() || {});
+                    const val = snap.val() || {};
+                    setDraftState(val);
+                    try { localStorage.setItem(`survivor-draftState-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(val)); } catch(e) {}
                 });
                 return () => dsRef.off();
             }, [activeLeagueId, activeSeasonId]);
@@ -2787,6 +2816,18 @@
                     if (savedScores) {
                         setScores(JSON.parse(savedScores));
                     }
+                    const savedElim = localStorage.getItem(`survivor-eliminationOrder-${activeLeagueId}-${activeSeasonId}`);
+                    if (savedElim) {
+                        setEliminationOrder(JSON.parse(savedElim));
+                    }
+                    const savedWinner = localStorage.getItem(`survivor-winner-${activeLeagueId}-${activeSeasonId}`);
+                    if (savedWinner) {
+                        setWinner(JSON.parse(savedWinner));
+                    }
+                    const savedScoredEpisodes = localStorage.getItem(`survivor-scoredEpisodes-${activeLeagueId}-${activeSeasonId}`);
+                    if (savedScoredEpisodes) {
+                        setScoredEpisodes(JSON.parse(savedScoredEpisodes));
+                    }
                     return;
                 }
                 
@@ -2797,10 +2838,19 @@
                     const val = snapshot.val();
                     if (val) {
                         setPlayerTeams(val);
+                        try { localStorage.setItem(`survivor-teams-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(val)); } catch(e) {}
                     } else if (activeLeagueId === 'jackson-ryan-league' && activeSeasonId === 'season-50') {
                         database.ref('leagues/jackson-ryan-league/teams').once('value').then(snap => {
-                            if (snap.val()) setPlayerTeams(snap.val());
-                            else database.ref('teams').once('value').then(legacySnap => setPlayerTeams(legacySnap.val() || {}));
+                            if (snap.val()) {
+                                setPlayerTeams(snap.val());
+                                try { localStorage.setItem(`survivor-teams-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(snap.val())); } catch(e) {}
+                            } else {
+                                database.ref('teams').once('value').then(legacySnap => {
+                                    const legVal = legacySnap.val() || {};
+                                    setPlayerTeams(legVal);
+                                    try { localStorage.setItem(`survivor-teams-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(legVal)); } catch(e) {}
+                                });
+                            }
                         });
                     } else {
                         setPlayerTeams({});
@@ -2812,8 +2862,13 @@
                     const val = snapshot.val();
                     if (val) {
                         setScores(val);
+                        try { localStorage.setItem(`survivor-scores-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(val)); } catch(e) {}
                     } else if (activeLeagueId === 'jackson-ryan-league' && activeSeasonId === 'season-50') {
-                        database.ref('scores').once('value').then(snap => setScores(snap.val() || {}));
+                        database.ref('scores').once('value').then(snap => {
+                            const scVal = snap.val() || {};
+                            setScores(scVal);
+                            try { localStorage.setItem(`survivor-scores-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(scVal)); } catch(e) {}
+                        });
                     } else {
                         setScores({});
                     }
@@ -2824,8 +2879,13 @@
                     const val = snapshot.val();
                     if (val) {
                         setEliminationOrder(val);
+                        try { localStorage.setItem(`survivor-eliminationOrder-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(val)); } catch(e) {}
                     } else if (activeLeagueId === 'jackson-ryan-league' && activeSeasonId === 'season-50') {
-                        database.ref('eliminationOrder').once('value').then(snap => setEliminationOrder(snap.val() || {}));
+                        database.ref('eliminationOrder').once('value').then(snap => {
+                            const elVal = snap.val() || {};
+                            setEliminationOrder(elVal);
+                            try { localStorage.setItem(`survivor-eliminationOrder-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(elVal)); } catch(e) {}
+                        });
                     } else {
                         setEliminationOrder({});
                     }
@@ -2836,8 +2896,13 @@
                     const val = snapshot.val();
                     if (val) {
                         setWinner(val);
+                        try { localStorage.setItem(`survivor-winner-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(val)); } catch(e) {}
                     } else if (activeLeagueId === 'jackson-ryan-league' && activeSeasonId === 'season-50') {
-                        database.ref('winner').once('value').then(snap => setWinner(snap.val() || null));
+                        database.ref('winner').once('value').then(snap => {
+                            const winVal = snap.val() || null;
+                            setWinner(winVal);
+                            try { localStorage.setItem(`survivor-winner-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(winVal)); } catch(e) {}
+                        });
                     } else {
                         setWinner(null);
                     }
@@ -2845,11 +2910,14 @@
                 
                 const scoredEpisodesRef = database.ref(`${seasonBasePath}/scoredEpisodes`);
                 scoredEpisodesRef.on('value', (snapshot) => {
-                    setScoredEpisodes(snapshot.val() || {});
+                    const val = snapshot.val() || {};
+                    setScoredEpisodes(val);
+                    try { localStorage.setItem(`survivor-scoredEpisodes-${activeLeagueId}-${activeSeasonId}`, JSON.stringify(val)); } catch(e) {}
                 });
 
                 database.ref('currentEpisode').on('value', (snapshot) => {
-                    setCurrentEpisode(snapshot.val() || 1);
+                    const ep = snapshot.val() || 1;
+                    setCurrentEpisode(ep);
                 });
                 
                 return () => {
@@ -4262,7 +4330,7 @@
                         // Side Menu Sidebar Panel
                         h('aside', {
                             className: `fixed top-0 left-0 bottom-0 w-80 max-w-[85vw] bg-slate-900 text-white shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col justify-between overflow-y-auto border-r border-slate-800 ${
-                                showSideMenu ? 'translate-x-0' : '-translate-x-full'
+                                showSideMenu ? 'translate-x-0' : '-translate-x-full pointer-events-none'
                             }`
                         },
                             h('div', { className: 'p-6 pt-safe pb-safe' },

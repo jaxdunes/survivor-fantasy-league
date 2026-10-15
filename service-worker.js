@@ -1,5 +1,5 @@
 // Service Worker for Survivor 51 Fantasy League
-const CACHE_NAME = 'survivor-51-v7';
+const CACHE_NAME = 'survivor-51-v9';
 const urlsToCache = [
     './',
     './index.html',
@@ -8,8 +8,10 @@ const urlsToCache = [
     './scoring.html',
     './notifications.html',
     './manifest.json',
+    './css/tailwind.min.css',
     './js/config.js',
     './js/scoring-engine.js',
+    './js/episode-filter.js',
     './js/api.js',
     './seasons/season-50.json',
     './seasons/season-51.json'
@@ -42,20 +44,58 @@ self.addEventListener('activate', (event) => {
     );
 });
 
-// Fetch event (Network first for scripts and HTML, cache fallback)
+// Fetch event: Stale-While-Revalidate for app assets, Cache-First for vendor CDNs
 self.addEventListener('fetch', (event) => {
-    event.respondWith(
-        fetch(event.request)
-            .then((response) => {
-                if (response && response.status === 200 && event.request.method === 'GET') {
-                    const responseToCache = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseToCache);
-                    });
+    // Only handle GET requests
+    if (event.request.method !== 'GET') return;
+
+    const url = new URL(event.request.url);
+
+    // Bypass Firebase Realtime Database and Auth network calls
+    if (url.hostname.includes('firebaseio.com') || url.hostname.includes('identitytoolkit.googleapis.com')) {
+        return;
+    }
+
+    // Cache-First for static third-party vendor assets (React, Firebase SDKs, Google Fonts)
+    const isVendorAsset = url.hostname.includes('cdn.jsdelivr.net') ||
+                          url.hostname.includes('gstatic.com') ||
+                          url.hostname.includes('fonts.googleapis.com');
+
+    if (isVendorAsset) {
+        event.respondWith(
+            caches.match(event.request).then((cachedResponse) => {
+                if (cachedResponse) {
+                    return cachedResponse;
                 }
-                return response;
+                return fetch(event.request).then((networkResponse) => {
+                    if (networkResponse && networkResponse.status === 200) {
+                        const responseToCache = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+                    }
+                    return networkResponse;
+                });
             })
-            .catch(() => caches.match(event.request))
+        );
+        return;
+    }
+
+    // Stale-While-Revalidate for local app assets
+    event.respondWith(
+        caches.match(event.request).then((cachedResponse) => {
+            const fetchPromise = fetch(event.request)
+                .then((networkResponse) => {
+                    if (networkResponse && networkResponse.status === 200) {
+                        const responseToCache = networkResponse.clone();
+                        caches.open(CACHE_NAME).then((cache) => {
+                            cache.put(event.request, responseToCache);
+                        });
+                    }
+                    return networkResponse;
+                })
+                .catch(() => cachedResponse);
+
+            return cachedResponse || fetchPromise;
+        })
     );
 });
 
