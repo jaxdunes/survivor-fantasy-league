@@ -46,7 +46,7 @@ var AVAILABLE_LEAGUES = {
             },
             { 
                 id: 'season-50', 
-                name: 'Season 50: In the Hands of the Gods', 
+                name: 'Season 50: In the Hands of the Fans', 
                 status: 'previous', 
                 label: 'Season 50',
                 teams: [

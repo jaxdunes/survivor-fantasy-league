@@ -27,14 +27,14 @@ This skill standardizes the engineering workflow for all features, enhancements,
 
 ---
 
-### Step 2: Formulate `prd.md` and `implementationplan.md`
+### Step 2: Formulate `prd.md` and `implementation_plan.md`
 
 Before writing or modifying any application code, prepare two foundational documents in the subfolder:
 
 1. **`prd.md`**:
    - Define the problem/opportunity, scope, functional requirements, data schema, and acceptance criteria.
    - You can reference or adapt [prd_template.md](./resources/prd_template.md).
-2. **`implementationplan.md`**:
+2. **`implementation_plan.md`**:
    - Specify target files to modify, architectural design, test state initialization strategy, phased execution steps, and verification approach.
    - You can reference or adapt [implementation_plan_template.md](./resources/implementation_plan_template.md).
 
@@ -80,7 +80,7 @@ Always consider and define **how to initialize the testing site's data state** s
 
 ### Step 6: Carry Out Implementation Plan
 
-1. Follow the approved phased execution steps in `implementationplan.md`.
+1. Follow the approved phased execution steps in `implementation_plan.md`.
 2. Keep code edits focused, maintain documentation integrity, and preserve existing features.
 
 ---

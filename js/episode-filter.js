@@ -184,35 +184,39 @@
         return h('div', {
             className: 'bg-white/95 backdrop-blur-md rounded-2xl p-4 mb-6 shadow-xl border border-gray-100 flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3.5'
         },
-            // Left Label & Legend
-            h('div', { className: 'flex flex-wrap items-center gap-3' },
-                h('div', { className: 'flex items-center gap-2' },
-                    h('span', { className: 'text-lg' }, '📺'),
-                    h('span', { className: 'text-xs font-black uppercase tracking-wider text-gray-800 font-mono' }, 'Episodes Scored:'),
-                    h('button', {
-                        type: 'button',
-                        id: 'tracker-viewing-badge-btn',
-                        onClick: onOpenModal,
-                        title: onOpenModal ? 'Click to open Episode Selector / Catch-Up modal' : '',
-                        className: `text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-mono flex items-center gap-1 transition ${onOpenModal ? 'hover:bg-orange-200 cursor-pointer shadow-xs' : ''}`
-                    },
-                        h('span', {}, viewingEpNum === 0 ? 'Viewing: Pre-Season' : `Viewing: Ep ${viewingEpNum}`),
-                        onOpenModal ? h('span', { className: 'text-[9px] text-orange-600 font-normal opacity-70' }, '✎') : null
+            // Left Label, Legend & Explanatory Subtitle
+            h('div', { className: 'flex flex-col gap-1' },
+                h('div', { className: 'flex flex-wrap items-center gap-3' },
+                    h('div', { className: 'flex items-center gap-2' },
+                        h('span', { className: 'text-xs font-black uppercase tracking-wider text-gray-800 font-mono' }, 'Episode History:'),
+                        h('button', {
+                            type: 'button',
+                            id: 'tracker-viewing-badge-btn',
+                            onClick: onOpenModal,
+                            title: onOpenModal ? 'Click to open Episode Selector / Catch-Up modal' : '',
+                            className: `text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-300 font-mono flex items-center gap-1 transition ${onOpenModal ? 'hover:bg-orange-200 cursor-pointer shadow-xs' : ''}`
+                        },
+                            h('span', {}, viewingEpNum === 0 ? 'Viewing: Pre-Season' : `Viewing: Ep ${viewingEpNum}`),
+                            onOpenModal ? h('span', { className: 'text-[9px] text-orange-600 font-normal opacity-70' }, '✎') : null
+                        )
+                    ),
+                    h('div', { className: 'hidden sm:flex items-center gap-2 text-[10px] font-bold text-gray-500 border-l border-gray-200 pl-3' },
+                        h('span', { className: 'flex items-center gap-1' },
+                            h('span', { className: 'w-1.5 h-1.5 rounded-full bg-emerald-500' }), 'Scored (✓)'
+                        ),
+                        h('span', { className: 'flex items-center gap-1' },
+                            h('span', { className: 'w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse' }), 'Live Scoring (⚪)'
+                        ),
+                        h('span', { className: 'flex items-center gap-1' },
+                            h('span', { className: 'w-1.5 h-1.5 rounded-full bg-gray-400' }), 'Unwatched'
+                        ),
+                        h('span', { className: 'flex items-center gap-1' },
+                            h('span', { className: 'w-1.5 h-1.5 rounded-full bg-amber-700/40' }), 'Unscored (✗)'
+                        )
                     )
                 ),
-                h('div', { className: 'hidden sm:flex items-center gap-2 text-[10px] font-bold text-gray-500 border-l border-gray-200 pl-3' },
-                    h('span', { className: 'flex items-center gap-1' },
-                        h('span', { className: 'w-1.5 h-1.5 rounded-full bg-emerald-500' }), 'Scored (✓)'
-                    ),
-                    h('span', { className: 'flex items-center gap-1' },
-                        h('span', { className: 'w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse' }), 'Live Scoring (⚪)'
-                    ),
-                    h('span', { className: 'flex items-center gap-1' },
-                        h('span', { className: 'w-1.5 h-1.5 rounded-full bg-gray-400' }), 'Unwatched'
-                    ),
-                    h('span', { className: 'flex items-center gap-1' },
-                        h('span', { className: 'w-1.5 h-1.5 rounded-full bg-amber-700/40' }), 'Unscored (✗)'
-                    )
+                h('p', { className: 'text-[11px] text-gray-500 font-medium' },
+                    'Select any episode to view the historical state of the competition, scores, and rosters as of that episode.'
                 )
             ),
 
