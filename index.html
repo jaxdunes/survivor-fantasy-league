@@ -2256,6 +2256,8 @@
             const [bulkEditEpisode, setBulkEditEpisode] = useState(1);
             const [bulkAssignments, setBulkAssignments] = useState({});
             const [draggedPlayerId, setDraggedPlayerId] = useState(null);
+            const [isUnassignedCollapsed, setIsUnassignedCollapsed] = useState(false);
+            const [selectedCastawayToMove, setSelectedCastawayToMove] = useState(null);
             const [showConfirmMergeModal, setShowConfirmMergeModal] = useState(false);
             const [showAddCustomTribeModal, setShowAddCustomTribeModal] = useState(false);
             const [editingTribeOriginalName, setEditingTribeOriginalName] = useState(null);
@@ -2411,6 +2413,12 @@
                                 ? ensureArray(localData.scoringCategories)
                                 : null));
 
+                    const activeDeleted = (fb.deletedTribes && ensureArray(fb.deletedTribes).length > 0)
+                        ? ensureArray(fb.deletedTribes)
+                        : ((localData?.deletedTribes && ensureArray(localData.deletedTribes).length > 0)
+                            ? ensureArray(localData.deletedTribes)
+                            : ensureArray(preset.deletedTribes));
+
                     setSeasonData(prev => {
                         const merged = {
                             ...preset,
@@ -2418,6 +2426,7 @@
                             ...fb,
                             contestants: activeContestants.length > 0 ? activeContestants : (prev?.contestants || []),
                             customTribes: activeCustom.length > 0 ? activeCustom : (prev?.customTribes || []),
+                            deletedTribes: activeDeleted.length > 0 ? activeDeleted : (prev?.deletedTribes || []),
                             scoringCategories: activeScoring || prev?.scoringCategories || null
                         };
                         try { localStorage.setItem(`survivor-seasonData-${activeSeasonId}`, JSON.stringify(merged)); } catch(e) {}
@@ -2498,14 +2507,27 @@
 
             const availableTribes = useMemo(() => {
                 const tribes = new Set();
+                const deletedTribesList = (seasonData && seasonData.deletedTribes) 
+                    ? ensureArray(seasonData.deletedTribes).map(t => (t || '').toLowerCase().trim()) 
+                    : [];
                 const defaultPlayersList = activeSeasonId === 'season-50' ? defaultSeason50Players : defaultSeason51Players;
-                defaultPlayersList.forEach(p => {
-                    if (p.startingTribe && p.startingTribe !== 'Unassigned') tribes.add(p.startingTribe);
-                    if (p.tribe && p.tribe !== 'Unassigned') tribes.add(p.tribe);
+                const currentContestants = (seasonData?.contestants && ensureArray(seasonData.contestants).length > 0)
+                    ? ensureArray(seasonData.contestants)
+                    : defaultPlayersList;
+
+                currentContestants.forEach(p => {
+                    if (p.startingTribe && p.startingTribe !== 'Unassigned' && !deletedTribesList.includes(p.startingTribe.toLowerCase().trim())) {
+                        tribes.add(p.startingTribe);
+                    }
+                    if (p.tribe && p.tribe !== 'Unassigned' && !deletedTribesList.includes(p.tribe.toLowerCase().trim())) {
+                        tribes.add(p.tribe);
+                    }
                 });
                 if (seasonData?.customTribes && Array.isArray(seasonData.customTribes)) {
                     seasonData.customTribes.forEach(ct => {
-                        if (ct && ct.name) tribes.add(ct.name);
+                        if (ct && ct.name && !deletedTribesList.includes(ct.name.toLowerCase().trim())) {
+                            tribes.add(ct.name);
+                        }
                     });
                 }
                 tribes.add('Merge Tribe');
@@ -2513,15 +2535,17 @@
                 return Array.from(tribes);
             }, [activeSeasonId, seasonData]);
 
-            const saveSeasonDataToFirebase = async (newContestants, newCustomTribes, newScoringCategories) => {
+            const saveSeasonDataToFirebase = async (newContestants, newCustomTribes, newScoringCategories, newDeletedTribes) => {
                 const updatedContestants = newContestants !== undefined ? ensureArray(newContestants) : ensureArray(seasonData?.contestants);
                 const updatedCustomTribes = newCustomTribes !== undefined ? ensureArray(newCustomTribes) : ensureArray(seasonData?.customTribes);
                 const updatedScoringCategories = newScoringCategories !== undefined ? ensureArray(newScoringCategories) : (seasonData?.scoringCategories ? ensureArray(seasonData.scoringCategories) : null);
+                const updatedDeletedTribes = newDeletedTribes !== undefined ? ensureArray(newDeletedTribes) : ensureArray(seasonData?.deletedTribes);
 
                 const updatedSeasonData = {
                     ...(seasonData || {}),
                     contestants: updatedContestants,
                     customTribes: updatedCustomTribes,
+                    deletedTribes: updatedDeletedTribes,
                     ...(updatedScoringCategories ? { scoringCategories: updatedScoringCategories } : {})
                 };
 
@@ -2530,7 +2554,8 @@
                 if (window.firebaseInitialized) {
                     const updates = {
                         contestants: updatedContestants,
-                        customTribes: updatedCustomTribes
+                        customTribes: updatedCustomTribes,
+                        deletedTribes: updatedDeletedTribes
                     };
                     if (updatedScoringCategories) {
                         updates.scoringCategories = updatedScoringCategories;
@@ -2664,6 +2689,66 @@
                 }
             };
 
+            const handleDeleteTribe = async () => {
+                if (!editingTribeOriginalName) return;
+                const tribeToDelete = editingTribeOriginalName;
+
+                const skipConfirm = typeof window !== 'undefined' && (window.__testSkipConfirm || new URLSearchParams(window.location.search).get('testSkipConfirm') === 'true');
+                const confirmed = skipConfirm || window.confirm(
+                    `Are you sure you want to delete the "${tribeToDelete}" tribe? All castaways assigned to this tribe will be moved to Unassigned Castaways.`
+                );
+                if (!confirmed) return;
+
+                const existingCustom = (seasonData && seasonData.customTribes) ? ensureArray(seasonData.customTribes) : [];
+                const updatedCustom = existingCustom.filter(ct => ct && ct.name && ct.name.toLowerCase().trim() !== tribeToDelete.toLowerCase().trim());
+
+                const existingDeleted = (seasonData && seasonData.deletedTribes) ? ensureArray(seasonData.deletedTribes) : [];
+                const updatedDeleted = Array.from(new Set([...existingDeleted, tribeToDelete]));
+
+                const defaultPlayersList = activeSeasonId === 'season-50' ? defaultSeason50Players : defaultSeason51Players;
+                const rawContestants = (seasonData && seasonData.contestants) ? seasonData.contestants : defaultPlayersList;
+                const updatedContestants = rawContestants.map(p => {
+                    let updatedP = { ...p };
+                    if (updatedP.tribe && updatedP.tribe.toLowerCase().trim() === tribeToDelete.toLowerCase().trim()) {
+                        updatedP.tribe = 'Unassigned';
+                    }
+                    if (updatedP.startingTribe && updatedP.startingTribe.toLowerCase().trim() === tribeToDelete.toLowerCase().trim()) {
+                        updatedP.startingTribe = 'Unassigned';
+                    }
+                    if (updatedP.tribeHistory && Array.isArray(updatedP.tribeHistory)) {
+                        updatedP.tribeHistory = updatedP.tribeHistory.map(h => {
+                            if (h.tribe && h.tribe.toLowerCase().trim() === tribeToDelete.toLowerCase().trim()) {
+                                return {
+                                    ...h,
+                                    tribe: 'Unassigned',
+                                    type: 'Tribe Deleted',
+                                    label: `Tribe ${tribeToDelete} Deleted`
+                                };
+                            }
+                            return h;
+                        });
+                    }
+                    return updatedP;
+                });
+
+                setBulkAssignments(prev => {
+                    const next = { ...prev };
+                    Object.keys(next).forEach(pid => {
+                        if (next[pid] && next[pid].toLowerCase().trim() === tribeToDelete.toLowerCase().trim()) {
+                            next[pid] = 'Unassigned';
+                        }
+                    });
+                    return next;
+                });
+
+                setIsUnassignedCollapsed(false);
+
+                await saveSeasonDataToFirebase(updatedContestants, updatedCustom, undefined, updatedDeleted);
+                setEditingTribeOriginalName(null);
+                setCustomTribeName('');
+                setShowAddCustomTribeModal(false);
+            };
+
             const handleUnassignAllPlayers = () => {
                 const activePlayersForEp = players.filter(p => {
                     const elimEp = eliminationOrder && (eliminationOrder[p.id] || eliminationOrder[String(p.id)]);
@@ -2678,6 +2763,7 @@
                     });
                     return next;
                 });
+                setIsUnassignedCollapsed(false);
             };
 
             const handleOpenBulkEdit = (targetEp) => {
@@ -2688,26 +2774,36 @@
                 setBulkEditEpisode(defEp);
                 
                 const initialMap = {};
+                let unassignedCount = 0;
                 players.forEach(p => {
                     const elimEp = eliminationOrder && (eliminationOrder[p.id] || eliminationOrder[String(p.id)]);
                     if (!elimEp || parseInt(elimEp) >= parseInt(defEp)) {
-                        initialMap[p.id] = typeof window.getTribeForEpisode === 'function' ? window.getTribeForEpisode(p, defEp) : (p.tribe || p.startingTribe || 'Unassigned');
+                        const tr = typeof window.getTribeForEpisode === 'function' ? window.getTribeForEpisode(p, defEp) : (p.tribe || p.startingTribe || 'Unassigned');
+                        initialMap[p.id] = tr;
+                        if (!tr || tr === 'Unassigned') unassignedCount++;
                     }
                 });
                 setBulkAssignments(initialMap);
+                setSelectedCastawayToMove(null);
+                setIsUnassignedCollapsed(unassignedCount === 0);
                 setShowBulkEditModal(true);
             };
 
             const handleBulkEpisodeChange = (newEp) => {
                 setBulkEditEpisode(newEp);
                 const updatedMap = {};
+                let unassignedCount = 0;
                 players.forEach(p => {
                     const elimEp = eliminationOrder && (eliminationOrder[p.id] || eliminationOrder[String(p.id)]);
                     if (!elimEp || parseInt(elimEp) >= parseInt(newEp)) {
-                        updatedMap[p.id] = typeof window.getTribeForEpisode === 'function' ? window.getTribeForEpisode(p, newEp) : (p.tribe || p.startingTribe || 'Unassigned');
+                        const tr = typeof window.getTribeForEpisode === 'function' ? window.getTribeForEpisode(p, newEp) : (p.tribe || p.startingTribe || 'Unassigned');
+                        updatedMap[p.id] = tr;
+                        if (!tr || tr === 'Unassigned') unassignedCount++;
                     }
                 });
                 setBulkAssignments(updatedMap);
+                setSelectedCastawayToMove(null);
+                setIsUnassignedCollapsed(unassignedCount === 0);
             };
 
             const handleSaveBulkEdit = () => {
@@ -4673,9 +4769,9 @@
                     }),
 
                     // Add / Edit Custom Tribe Modal
-                    showAddCustomTribeModal && h('div', { id: 'modal-add-custom-tribe', className: 'fixed inset-0 bg-black/85 backdrop-blur-sm z-[1200] flex items-center justify-center p-4' },
+                    showAddCustomTribeModal && h('div', { id: 'modal-add-custom-tribe', className: 'fixed inset-0 bg-black/85 backdrop-blur-sm z-[1200] flex justify-center p-3 md:p-4 overflow-y-auto' },
                         h('div', { 
-                            className: 'rounded-3xl max-w-sm w-full p-6 shadow-2xl border-2 relative',
+                            className: 'rounded-3xl max-w-sm w-full p-5 md:p-6 shadow-2xl border-2 relative my-auto max-h-[92vh] overflow-y-auto',
                             style: { backgroundColor: '#18110c', borderColor: 'rgba(245, 158, 11, 0.45)', color: '#f3eae1' }
                         },
                             h('h3', { className: 'text-2xl font-black text-amber-400 mb-1', style: { fontFamily: '"Bebas Neue", cursive' } }, editingTribeOriginalName ? 'Edit Tribe' : 'Add New Custom Tribe'),
@@ -4784,65 +4880,91 @@
                                     onClick: handleSaveCustomTribe,
                                     className: 'w-1/2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm shadow-md cursor-pointer transition'
                                 }, editingTribeOriginalName ? 'Save Changes' : 'Save Tribe')
+                            ),
+                            editingTribeOriginalName && h('div', { className: 'pt-3 mt-3 border-t border-slate-800/80' },
+                                h('button', {
+                                    id: 'btn-delete-tribe',
+                                    type: 'button',
+                                    onClick: handleDeleteTribe,
+                                    className: 'w-full py-2.5 px-4 rounded-xl text-xs font-bold text-red-400 hover:text-white bg-red-950/40 hover:bg-red-600 border border-red-800/60 hover:border-red-500 transition-all cursor-pointer flex items-center justify-center tracking-wider uppercase'
+                                }, 'Delete Tribe')
                             )
                         )
                     ),
 
                     // Visual Drag & Drop Bulk Tribe Edit Modal
-                    showBulkEditModal && h('div', { id: 'modal-bulk-edit', className: 'fixed inset-0 bg-black/85 backdrop-blur-md z-[1100] flex items-center justify-center p-4 md:p-6 overflow-y-auto' },
-                        h('div', { className: 'bg-slate-900 rounded-3xl max-w-5xl w-full p-6 text-white shadow-2xl border-2 border-orange-500/50 max-h-[90vh] flex flex-col justify-between' },
-                            h('div', {},
+                    showBulkEditModal && h('div', {
+                        id: 'modal-bulk-edit',
+                        className: 'fixed inset-0 bg-black/85 backdrop-blur-md z-[1100] flex justify-center p-3 md:p-6 overflow-y-auto',
+                        onKeyDown: (e) => {
+                            if (e.key === 'Escape' && selectedCastawayToMove) {
+                                setSelectedCastawayToMove(null);
+                            }
+                        }
+                    },
+                        h('div', { className: 'bg-slate-900 rounded-3xl max-w-6xl w-full p-4 md:p-5 text-white shadow-2xl border-2 border-orange-500/50 max-h-[92vh] my-auto flex flex-col justify-between' },
+                            h('div', { className: 'flex flex-col flex-1 min-h-0' },
                                 // Header Bar
-                                h('div', { className: 'flex justify-between items-center mb-4 pb-3 border-b border-slate-800 flex-wrap gap-2' },
-                                    h('div', { className: 'flex items-center gap-2' },
-                                        h('span', { className: 'text-3xl' }, '🏕️'),
-                                        h('div', {},
-                                            h('h2', { className: 'text-3xl font-black text-amber-400 uppercase tracking-wider', style: { fontFamily: '"Bebas Neue", cursive' } }, 'EDIT TRIBES (VISUAL BULK DASHBOARD)'),
-                                            h('p', { className: 'text-xs text-slate-400 font-semibold' }, 'Drag & Drop players into tribe shape containers. Click "Save Changes" to apply season-wide.')
-                                        )
+                                h('div', { className: 'flex justify-between items-center mb-3 pb-3 border-b border-slate-800 flex-wrap gap-2 shrink-0' },
+                                    h('div', {},
+                                        h('h2', { className: 'text-2xl md:text-3xl font-black text-amber-400 uppercase tracking-wider', style: { fontFamily: '"Bebas Neue", cursive' } }, 'BULK TRIBE VISUALIZER'),
+                                        h('p', { className: 'text-xs text-slate-400 font-semibold' }, 'Drag & drop or click castaways to move between tribes. Click "Save Changes" to apply season-wide.')
                                     ),
                                     h('div', { className: 'flex items-center gap-2' },
                                         h('button', {
                                             id: 'btn-bulk-add-tribe',
                                             onClick: handleOpenAddCustomTribe,
-                                            className: 'px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold rounded-xl border border-amber-500/40 text-xs flex items-center gap-1 cursor-pointer'
-                                        }, '➕ Add Tribe'),
+                                            className: 'px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold rounded-xl border border-amber-500/40 text-xs flex items-center gap-1 cursor-pointer transition'
+                                        }, '+ Add Tribe'),
                                         h('button', {
                                             id: 'btn-bulk-unassign-all',
                                             onClick: handleUnassignAllPlayers,
                                             className: 'px-3 py-1.5 bg-slate-800 hover:bg-rose-950/70 text-rose-300 font-bold rounded-xl border border-rose-500/40 text-xs flex items-center gap-1 cursor-pointer transition'
-                                        }, 'Unassign All Players'),
+                                        }, 'Unassign All Castaways'),
                                         h('button', {
                                             id: 'btn-bulk-merge-all',
                                             onClick: () => setShowConfirmMergeModal(true),
-                                            className: 'px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-md cursor-pointer'
-                                        }, '🤝 Merge All Players'),
+                                            className: 'px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 text-white font-bold rounded-xl text-xs flex items-center gap-1 shadow-md cursor-pointer transition'
+                                        }, 'Merge All Castaways'),
                                         h('button', {
                                             id: 'btn-bulk-close',
-                                            onClick: () => setShowBulkEditModal(false),
-                                            className: 'p-2 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer'
-                                        }, '✕')
+                                            onClick: () => {
+                                                setSelectedCastawayToMove(null);
+                                                setShowBulkEditModal(false);
+                                            },
+                                            className: 'w-8 h-8 rounded-xl bg-slate-800 text-slate-400 hover:text-white transition cursor-pointer font-bold flex items-center justify-center'
+                                        }, '×')
                                     )
                                 ),
 
-                                // Target Episode Selector
-                                h('div', { className: 'flex items-center justify-between mb-4 bg-slate-950/80 p-3 rounded-2xl border border-slate-800 flex-wrap gap-2' },
+                                // Target Episode Selector & Instructions
+                                h('div', { className: 'flex items-center justify-between mb-3 bg-slate-950/80 px-3.5 py-2 rounded-xl border border-slate-800 flex-wrap gap-2 shrink-0' },
                                     h('div', { className: 'flex items-center gap-2' },
-                                        h('span', { className: 'text-xs font-bold text-slate-400 uppercase' }, 'Target Episode:'),
+                                        h('span', { className: 'text-xs font-bold text-slate-400 uppercase tracking-wider' }, 'Target Episode:'),
                                         h('select', {
                                             value: bulkEditEpisode,
                                             onChange: (e) => handleBulkEpisodeChange(parseInt(e.target.value)),
-                                            className: 'px-3 py-1.5 bg-slate-800 text-amber-300 font-bold rounded-xl border border-amber-500/40 text-xs focus:outline-none cursor-pointer'
+                                            className: 'px-3 py-1 bg-slate-800 text-amber-300 font-bold rounded-lg border border-amber-500/40 text-xs focus:outline-none cursor-pointer'
                                         },
                                             Array.from({ length: 14 }, (_, i) => i + 1).map(ep => 
                                                 h('option', { key: ep, value: ep }, `Episode ${ep}`)
                                             )
                                         )
                                     ),
-                                    h('div', { className: 'text-xs text-amber-400/90 font-semibold' }, '🖐️ Drag player buttons between containers below:')
+                                    h('div', { className: 'text-xs' },
+                                        selectedCastawayToMove ?
+                                            h('span', { className: 'text-amber-300 font-bold flex items-center gap-2 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/30' },
+                                                `Selected: ${selectedCastawayToMove.name} - Click any tribe card to place them`,
+                                                h('button', {
+                                                    onClick: () => setSelectedCastawayToMove(null),
+                                                    className: 'text-[10px] text-slate-400 hover:text-white underline cursor-pointer ml-1'
+                                                }, 'Cancel')
+                                            ) :
+                                            h('span', { className: 'text-amber-400/90 font-medium' }, 'Drag & drop or click a castaway to move between containers')
+                                    )
                                 ),
 
-                                // Tribe Shape Containers Grid (Competing Tribes Top, Merge Tribe Bottom)
+                                // Split-Panel Body: Unassigned Castaways Panel (Left) + Destination Tribes Area (Right)
                                 (() => {
                                     const activePlayersForEp = players.filter(p => {
                                         const elimEp = eliminationOrder && (eliminationOrder[p.id] || eliminationOrder[String(p.id)]);
@@ -4855,13 +4977,28 @@
                                     };
 
                                     const competingTribes = availableTribes.filter(t => !isMergeName(t) && t !== 'Unassigned');
-                                    const mergeTribes = availableTribes.filter(t => isMergeName(t));
-                                    const unassignedTribes = availableTribes.filter(t => t === 'Unassigned');
+                                    let mergeTribes = availableTribes.filter(t => isMergeName(t));
+                                    if (mergeTribes.length === 0) {
+                                        mergeTribes = ['Merge Tribe'];
+                                    }
+
+                                    const getAssignedPlayers = (tName) => {
+                                        return activePlayersForEp.filter(p => {
+                                            const assigned = bulkAssignments[p.id] || bulkAssignments[String(p.id)];
+                                            if (tName === 'Unassigned') {
+                                                return !assigned || assigned === 'Unassigned';
+                                            }
+                                            return assigned === tName;
+                                        });
+                                    };
+
+                                    const unassignedList = getAssignedPlayers('Unassigned');
+                                    const isCollapsed = isUnassignedCollapsed || (unassignedList.length === 0);
 
                                     const renderTribeCard = (tribeName, isMerge = false) => {
                                         const style = (window.getTribeStyle ? window.getTribeStyle(tribeName, customTribesList) : null) || {};
-                                        const assignedPlayerIds = Object.keys(bulkAssignments).filter(id => bulkAssignments[id] === tribeName);
-                                        const assignedPlayersList = activePlayersForEp.filter(p => assignedPlayerIds.includes(String(p.id)) || assignedPlayerIds.includes(p.id));
+                                        const assignedPlayersList = getAssignedPlayers(tribeName);
+                                        const isTargetCandidate = selectedCastawayToMove && (bulkAssignments[selectedCastawayToMove.id] !== tribeName);
 
                                         return h('div', {
                                             key: tribeName,
@@ -4869,85 +5006,246 @@
                                             onDrop: (e) => {
                                                 e.preventDefault();
                                                 if (draggedPlayerId) {
-                                                    setBulkAssignments(prev => ({ ...prev, [draggedPlayerId]: tribeName }));
+                                                    const updatedAssignments = {
+                                                        ...bulkAssignments,
+                                                        [draggedPlayerId]: tribeName,
+                                                        [String(draggedPlayerId)]: tribeName
+                                                    };
+                                                    setBulkAssignments(updatedAssignments);
                                                     setDraggedPlayerId(null);
+                                                    const remainingUnassigned = activePlayersForEp.filter(p => {
+                                                        const tr = updatedAssignments[p.id] || updatedAssignments[String(p.id)];
+                                                        return !tr || tr === 'Unassigned';
+                                                    });
+                                                    if (remainingUnassigned.length === 0) {
+                                                        setIsUnassignedCollapsed(true);
+                                                    }
                                                 }
                                             },
-                                            className: `rounded-2xl p-4 border-2 ${style.borderColor || 'border-slate-700'} ${style.cardBg || 'bg-slate-900'} transition-all duration-200 flex flex-col justify-between shadow-lg`
+                                            onClick: () => {
+                                                if (selectedCastawayToMove) {
+                                                    const updatedAssignments = {
+                                                        ...bulkAssignments,
+                                                        [selectedCastawayToMove.id]: tribeName,
+                                                        [String(selectedCastawayToMove.id)]: tribeName
+                                                    };
+                                                    setBulkAssignments(updatedAssignments);
+                                                    setSelectedCastawayToMove(null);
+                                                    const remainingUnassigned = activePlayersForEp.filter(p => {
+                                                        const tr = updatedAssignments[p.id] || updatedAssignments[String(p.id)];
+                                                        return !tr || tr === 'Unassigned';
+                                                    });
+                                                    if (remainingUnassigned.length === 0) {
+                                                        setIsUnassignedCollapsed(true);
+                                                    }
+                                                }
+                                            },
+                                            className: `rounded-2xl p-3 border-2 ${isTargetCandidate ? 'border-amber-400 ring-2 ring-amber-400/40 shadow-amber-500/20' : (style.borderColor || 'border-slate-700')} ${style.cardBg || 'bg-slate-900'} transition-all duration-200 flex flex-col justify-between shadow-md ${selectedCastawayToMove ? 'cursor-pointer hover:border-amber-300' : ''}`
                                         },
                                         h('div', {},
-                                            // Tribe Shape Header
-                                            h('div', { className: `p-2.5 rounded-xl bg-gradient-to-r ${style.gradient || 'from-slate-700 to-slate-800'} text-white flex justify-between items-center mb-3 shadow-md` },
-                                                h('div', { className: 'flex items-center gap-2 font-black text-sm tracking-wider uppercase' },
-                                                    h('span', { className: `w-3 h-3 rounded-full inline-block shrink-0 border border-white/40 shadow-xs ${style.dotBg || 'bg-slate-400'}` }),
-                                                    h('span', {}, tribeName)
+                                            // Compact Tribe Header
+                                            h('div', { className: `p-2 rounded-xl bg-gradient-to-r ${style.gradient || 'from-slate-700 to-slate-800'} text-white flex justify-between items-center mb-2 shadow-xs` },
+                                                h('div', { className: 'flex items-center gap-1.5 font-black text-xs md:text-sm tracking-wider uppercase' },
+                                                    h('span', { className: `w-2.5 h-2.5 rounded-full inline-block shrink-0 border border-white/40 shadow-xs ${style.dotBg || 'bg-slate-400'}` }),
+                                                    h('span', { className: 'truncate max-w-[120px] md:max-w-[160px]' }, tribeName)
                                                 ),
-                                                h('div', { className: 'flex items-center gap-1.5' },
+                                                h('div', { className: 'flex items-center gap-1' },
                                                     (!isMerge && tribeName !== 'Unassigned' && !isMergeName(tribeName)) && h('button', {
                                                         type: 'button',
                                                         onClick: (e) => {
                                                             e.stopPropagation();
                                                             handleOpenEditTribe(tribeName);
                                                         },
-                                                        className: 'px-2 py-0.5 rounded-lg bg-black/35 hover:bg-black/60 text-[10px] font-bold text-white border border-white/20 transition cursor-pointer flex items-center gap-1 shadow-xs'
+                                                        className: 'px-2 py-0.5 rounded-md bg-black/35 hover:bg-black/60 text-[10px] font-bold text-white border border-white/20 transition cursor-pointer flex items-center gap-1 shadow-xs'
                                                     }, 'Edit Tribe'),
-                                                    h('span', { className: 'text-xs font-extrabold bg-white/20 backdrop-blur-sm px-2 py-0.5 rounded-full' }, `${assignedPlayersList.length} player(s)`)
+                                                    h('span', { className: 'text-[11px] font-extrabold bg-white/20 backdrop-blur-sm px-2 py-0.5 rounded-md' }, `${assignedPlayersList.length}`)
                                                 )
                                             ),
 
-                                            // Player Name Buttons Box
-                                            h('div', { className: `flex flex-wrap gap-2 ${isMerge ? 'min-h-[90px]' : 'min-h-[80px]'} p-2 bg-slate-950/40 rounded-xl border border-slate-800/80 items-start` },
+                                            // Compact Castaway Buttons Box
+                                            h('div', { className: 'flex flex-wrap gap-1.5 min-h-[64px] p-2 bg-slate-950/45 rounded-xl border border-slate-800/80 items-start' },
                                                 assignedPlayersList.length === 0 ?
-                                                    h('div', { className: 'w-full text-center text-xs text-slate-500 italic py-4' }, 'Drag players here') :
-                                                    assignedPlayersList.map(p => 
-                                                        h('div', {
+                                                    h('div', { className: 'w-full text-center text-[11px] text-slate-500 italic py-3' }, 'Drop castaways here') :
+                                                    assignedPlayersList.map(p => {
+                                                        const isSelected = selectedCastawayToMove && selectedCastawayToMove.id === p.id;
+                                                        return h('div', {
                                                             key: p.id,
                                                             draggable: true,
-                                                            onDragStart: () => setDraggedPlayerId(p.id),
-                                                            className: 'px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-xl font-bold text-xs border border-amber-500/40 cursor-grab active:cursor-grabbing shadow-sm flex items-center gap-1.5 transition transform hover:scale-105'
+                                                            onDragStart: (e) => {
+                                                                setDraggedPlayerId(p.id);
+                                                                e.dataTransfer.setData('text/plain', String(p.id));
+                                                            },
+                                                            onClick: (e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedCastawayToMove(prev => (prev && prev.id === p.id ? null : p));
+                                                            },
+                                                            className: `px-2 py-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg font-bold text-[11px] border ${isSelected ? 'border-amber-400 bg-amber-500/25 ring-2 ring-amber-400 text-white shadow-md' : 'border-amber-500/40'} cursor-grab active:cursor-grabbing shadow-xs flex items-center gap-1.5 transition transform hover:scale-[1.02]`
                                                         },
-                                                            h('img', { src: p.image, className: 'w-5 h-5 rounded-full object-cover border border-white' }),
-                                                            h('span', {}, p.name)
-                                                        )
-                                                    )
+                                                            h('img', { src: p.image, className: 'w-4 h-4 rounded-full object-cover border border-white/60 shrink-0' }),
+                                                            h('span', { className: 'truncate max-w-[110px]' }, p.name)
+                                                        );
+                                                    })
                                             )
                                         ));
                                     };
 
-                                    return h('div', { className: 'max-h-[55vh] overflow-y-auto pr-1 space-y-4' },
-                                        // 1. Competing Tribes (Original tribes + new custom tribes side by side)
-                                        h('div', {},
-                                            h('div', { className: 'flex items-center justify-between mb-2 px-1' },
-                                                h('span', { className: 'text-xs font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5' },
-                                                    h('span', {}, '🏕️'),
-                                                    'Active Tribes'
-                                                ),
-                                                h('span', { className: 'text-[11px] text-slate-400 font-semibold' }, `${competingTribes.length} Tribe(s)`)
-                                            ),
-                                            h('div', { className: 'grid md:grid-cols-2 lg:grid-cols-3 gap-4' },
-                                                competingTribes.map(tribeName => renderTribeCard(tribeName, false))
-                                            )
-                                        ),
+                                    return h('div', { className: 'flex gap-3 flex-1 min-h-0 overflow-hidden' },
+                                        // LEFT COLUMN: Unassigned Castaways Panel / Collapsed Dock
+                                        isCollapsed ?
+                                            // Collapsed Slim Dock
+                                            h('div', {
+                                                id: 'dock-unassigned-castaways',
+                                                onDragOver: (e) => e.preventDefault(),
+                                                onDrop: (e) => {
+                                                    e.preventDefault();
+                                                    if (draggedPlayerId) {
+                                                        setBulkAssignments(prev => ({
+                                                            ...prev,
+                                                            [draggedPlayerId]: 'Unassigned',
+                                                            [String(draggedPlayerId)]: 'Unassigned'
+                                                        }));
+                                                        setDraggedPlayerId(null);
+                                                        setIsUnassignedCollapsed(false);
+                                                    }
+                                                },
+                                                onClick: () => {
+                                                    if (selectedCastawayToMove) {
+                                                        setBulkAssignments(prev => ({
+                                                            ...prev,
+                                                            [selectedCastawayToMove.id]: 'Unassigned',
+                                                            [String(selectedCastawayToMove.id)]: 'Unassigned'
+                                                        }));
+                                                        setSelectedCastawayToMove(null);
+                                                        setIsUnassignedCollapsed(false);
+                                                    } else {
+                                                        setIsUnassignedCollapsed(false);
+                                                    }
+                                                },
+                                                title: selectedCastawayToMove ? `Click to unassign ${selectedCastawayToMove.name}` : 'Click or drop here to unassign castaways',
+                                                className: 'w-11 shrink-0 bg-slate-950/70 hover:bg-slate-900 border-2 border-dashed border-amber-500/40 hover:border-amber-400 rounded-2xl flex flex-col items-center justify-between py-3 px-1 transition-all duration-200 cursor-pointer shadow-md select-none'
+                                            },
+                                                h('button', {
+                                                    type: 'button',
+                                                    onClick: (e) => {
+                                                        e.stopPropagation();
+                                                        setIsUnassignedCollapsed(false);
+                                                    },
+                                                    className: 'w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold text-xs flex items-center justify-center border border-amber-500/30 transition'
+                                                }, '›'),
+                                                h('div', {
+                                                    className: 'text-[11px] font-bold text-amber-400 tracking-wider uppercase whitespace-nowrap select-none',
+                                                    style: { writingMode: 'vertical-rl', transform: 'rotate(180deg)' }
+                                                }, `Unassigned Castaways (${unassignedList.length})`),
+                                                h('span', { className: 'text-[10px] font-extrabold text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded-md border border-slate-700' }, `${unassignedList.length}`)
+                                            ) :
+                                            // Expanded Panel
+                                            h('div', {
+                                                id: 'panel-unassigned-castaways',
+                                                onDragOver: (e) => e.preventDefault(),
+                                                onDrop: (e) => {
+                                                    e.preventDefault();
+                                                    if (draggedPlayerId) {
+                                                        setBulkAssignments(prev => ({
+                                                            ...prev,
+                                                            [draggedPlayerId]: 'Unassigned',
+                                                            [String(draggedPlayerId)]: 'Unassigned'
+                                                        }));
+                                                        setDraggedPlayerId(null);
+                                                    }
+                                                },
+                                                onClick: () => {
+                                                    if (selectedCastawayToMove) {
+                                                        setBulkAssignments(prev => ({
+                                                            ...prev,
+                                                            [selectedCastawayToMove.id]: 'Unassigned',
+                                                            [String(selectedCastawayToMove.id)]: 'Unassigned'
+                                                        }));
+                                                        setSelectedCastawayToMove(null);
+                                                    }
+                                                },
+                                                className: 'w-64 sm:w-72 md:w-80 shrink-0 bg-slate-950/75 border-2 border-dashed border-amber-500/50 rounded-2xl p-3 flex flex-col justify-between shadow-lg transition-all duration-200 min-h-0'
+                                            },
+                                                h('div', { className: 'flex flex-col h-full min-h-0' },
+                                                    // Header of Unassigned Panel
+                                                    h('div', { className: 'flex justify-between items-center pb-2 mb-2 border-b border-slate-800/80 shrink-0' },
+                                                        h('div', { className: 'flex items-center gap-1.5' },
+                                                            h('span', { className: 'text-xs font-black tracking-wider uppercase text-amber-400' }, 'Unassigned Castaways'),
+                                                            h('span', { className: 'text-[10px] font-extrabold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded-md' }, `${unassignedList.length}`)
+                                                        ),
+                                                        h('button', {
+                                                            type: 'button',
+                                                            onClick: (e) => {
+                                                                e.stopPropagation();
+                                                                setIsUnassignedCollapsed(true);
+                                                            },
+                                                            title: 'Collapse panel',
+                                                            className: 'w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-bold text-xs flex items-center justify-center transition cursor-pointer'
+                                                        }, '‹')
+                                                    ),
 
-                                        // 2. Merge Section Arranged at the Bottom
-                                        h('div', { className: 'pt-3 border-t border-slate-800/80' },
-                                            h('div', { className: 'flex items-center justify-between mb-2 px-1' },
-                                                h('span', { className: 'text-xs font-black uppercase tracking-wider text-purple-400 flex items-center gap-1.5' },
-                                                    h('span', {}, '🤝'),
-                                                    'Merge & Consolidated Tribe'
-                                                ),
-                                                h('span', { className: 'text-[11px] text-slate-400 font-semibold' }, 'Arranged at bottom for post-merge assignments')
+                                                    // Castaway list
+                                                    h('div', { className: 'flex-1 overflow-y-auto pr-1 space-y-1.5 min-h-0' },
+                                                        unassignedList.length === 0 ?
+                                                            h('div', { className: 'text-xs text-slate-500 italic text-center py-8' }, 'No unassigned castaways.\nDrop castaways here to unassign.') :
+                                                            unassignedList.map(p => {
+                                                                const isSelected = selectedCastawayToMove && selectedCastawayToMove.id === p.id;
+                                                                return h('div', {
+                                                                    key: p.id,
+                                                                    draggable: true,
+                                                                    onDragStart: (e) => {
+                                                                        setDraggedPlayerId(p.id);
+                                                                        e.dataTransfer.setData('text/plain', String(p.id));
+                                                                    },
+                                                                    onClick: (e) => {
+                                                                        e.stopPropagation();
+                                                                        setSelectedCastawayToMove(prev => (prev && prev.id === p.id ? null : p));
+                                                                    },
+                                                                    className: `px-2.5 py-1.5 bg-slate-800/90 hover:bg-slate-700 text-amber-300 rounded-xl font-bold text-xs border ${isSelected ? 'border-amber-400 bg-amber-500/25 ring-2 ring-amber-400 text-white shadow-md' : 'border-amber-500/40'} cursor-grab active:cursor-grabbing shadow-xs flex items-center justify-between transition transform hover:scale-[1.02]`
+                                                                },
+                                                                    h('div', { className: 'flex items-center gap-2 truncate' },
+                                                                        h('img', { src: p.image, className: 'w-5 h-5 rounded-full object-cover border border-white/60 shrink-0' }),
+                                                                        h('span', { className: 'truncate text-xs' }, p.name)
+                                                                    ),
+                                                                    h('span', { className: 'text-[10px] text-slate-400 font-semibold shrink-0' }, 'Move ›')
+                                                                );
+                                                            })
+                                                    )
+                                                )
                                             ),
-                                            h('div', { className: `grid gap-4 ${unassignedTribes.length > 0 ? 'md:grid-cols-2' : 'grid-cols-1'}` },
-                                                mergeTribes.map(tribeName => 
-                                                    h('div', { key: tribeName },
-                                                        renderTribeCard(tribeName, true)
-                                                    )
+
+                                        // RIGHT COLUMN: Destination Tribes Area (Full Width when collapsed)
+                                        h('div', { className: 'flex-1 min-w-0 overflow-y-auto pr-1 space-y-3' },
+                                            // Active Tribes Section
+                                            h('div', {},
+                                                h('div', { className: 'flex items-center justify-between mb-2 px-1' },
+                                                    h('span', { className: 'text-xs font-black uppercase tracking-wider text-amber-400' }, 'Active Tribes'),
+                                                    h('span', { className: 'text-[11px] text-slate-400 font-semibold' }, `${competingTribes.length} Tribe(s)`)
                                                 ),
-                                                unassignedTribes.map(tribeName =>
-                                                    h('div', { key: tribeName },
-                                                        renderTribeCard(tribeName, true)
-                                                    )
+                                                h('div', {
+                                                    style: {
+                                                        display: 'grid',
+                                                        gridTemplateColumns: isCollapsed ? 'repeat(auto-fill, minmax(260px, 1fr))' : 'repeat(auto-fill, minmax(220px, 1fr))',
+                                                        gap: '0.75rem'
+                                                    }
+                                                },
+                                                    competingTribes.map(tribeName => renderTribeCard(tribeName, false))
+                                                )
+                                            ),
+
+                                            // Merge Tribe Section
+                                            h('div', { className: 'pt-2.5 border-t border-slate-800/80' },
+                                                h('div', { className: 'flex items-center justify-between mb-2 px-1' },
+                                                    h('span', { className: 'text-xs font-black uppercase tracking-wider text-purple-400' }, 'Merge Tribe'),
+                                                    h('span', { className: 'text-[11px] text-slate-400 font-semibold' }, 'Post-merge consolidated tribe')
+                                                ),
+                                                h('div', {
+                                                    style: {
+                                                        display: 'grid',
+                                                        gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+                                                        gap: '0.75rem'
+                                                    }
+                                                },
+                                                    mergeTribes.map(tribeName => renderTribeCard(tribeName, true))
                                                 )
                                             )
                                         )
@@ -4956,18 +5254,21 @@
                             ),
 
                             // Modal Footer Controls
-                            h('div', { className: 'flex justify-between items-center pt-4 border-t border-slate-800 mt-4 flex-wrap gap-2' },
+                            h('div', { className: 'flex justify-between items-center pt-3 border-t border-slate-800 mt-3 flex-wrap gap-2' },
                                 h('div', { className: 'text-xs text-slate-400 font-medium' }, 'Changes will be saved to season configuration across all leagues.'),
                                 h('div', { className: 'flex gap-2' },
                                     h('button', {
                                         id: 'btn-bulk-cancel',
-                                        onClick: () => setShowBulkEditModal(false),
-                                        className: 'px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-sm transition cursor-pointer'
+                                        onClick: () => {
+                                            setSelectedCastawayToMove(null);
+                                            setShowBulkEditModal(false);
+                                        },
+                                        className: 'px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs md:text-sm transition cursor-pointer'
                                     }, 'Cancel'),
                                     h('button', {
                                         id: 'btn-bulk-save-changes',
                                         onClick: handleSaveBulkEdit,
-                                        className: 'px-6 py-2.5 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold rounded-xl text-sm shadow-lg hover:shadow-xl transition cursor-pointer'
+                                        className: 'px-5 py-2 bg-gradient-to-r from-orange-500 to-amber-600 text-white font-bold rounded-xl text-xs md:text-sm shadow-lg hover:shadow-xl transition cursor-pointer'
                                     }, 'Save Changes')
                                 )
                             )
@@ -4978,21 +5279,20 @@
                     showConfirmMergeModal && h('div', { id: 'modal-confirm-merge', className: 'fixed inset-0 bg-black/90 backdrop-blur-md z-[1300] flex items-center justify-center p-4' },
                         h('div', { className: 'bg-slate-900 rounded-3xl max-w-lg w-full p-6 text-white shadow-2xl border-2 border-purple-500/60 relative' },
                             h('div', { className: 'flex items-center gap-3 mb-4 pb-3 border-b border-slate-800' },
-                                h('span', { className: 'text-3xl' }, '🤝'),
                                 h('div', {},
                                     h('h3', { className: 'text-2xl font-black text-amber-400', style: { fontFamily: '"Bebas Neue", cursive' } }, `CONFIRM MERGE (EPISODE ${bulkEditEpisode})`),
-                                    h('p', { className: 'text-xs text-slate-400 font-semibold' }, 'Shift all active players to Merge Tribe & award Merge points.')
+                                    h('p', { className: 'text-xs text-slate-400 font-semibold' }, 'Shift all active castaways to Merge Tribe & award Merge points.')
                                 )
                             ),
 
                             h('div', { className: 'bg-purple-950/80 text-purple-200 border border-purple-500/40 p-3 rounded-xl text-xs font-semibold mb-4 space-y-1' },
-                                h('div', { className: 'font-bold text-amber-300' }, '🏆 Automated Merge Actions:'),
-                                h('div', {}, `• Reassigns all active non-eliminated players to "Merge Tribe" starting Episode ${bulkEditEpisode}.`),
+                                h('div', { className: 'font-bold text-amber-300' }, 'Automated Merge Actions:'),
+                                h('div', {}, `• Reassigns all active non-eliminated castaways to "Merge Tribe" starting Episode ${bulkEditEpisode}.`),
                                 h('div', {}, `• Awards +10 Merge Points ("Makes It to the Merge") idempotently in score logs for all active leagues.`)
                             ),
 
                             h('div', { className: 'mb-4' },
-                                h('label', { className: 'block text-xs font-bold text-slate-300 uppercase mb-2' }, 'Contestants Scheduled for Merge:'),
+                                h('label', { className: 'block text-xs font-bold text-slate-300 uppercase mb-2' }, 'Castaways Scheduled for Merge:'),
                                 h('div', { className: 'flex flex-wrap gap-2 max-h-40 overflow-y-auto p-2 bg-slate-950/80 rounded-xl border border-slate-800' },
                                     players.filter(p => {
                                         const elimEp = eliminationOrder && (eliminationOrder[p.id] || eliminationOrder[String(p.id)]);
@@ -5009,12 +5309,12 @@
                             h('div', { className: 'flex gap-2' },
                                 h('button', {
                                     onClick: () => setShowConfirmMergeModal(false),
-                                    className: 'w-1/2 px-4 py-2.5 bg-slate-800 text-slate-300 font-bold rounded-xl text-sm hover:bg-slate-700'
+                                    className: 'w-1/2 px-4 py-2.5 bg-slate-800 text-slate-300 font-bold rounded-xl text-sm hover:bg-slate-700 transition cursor-pointer'
                                 }, 'Cancel'),
                                 h('button', {
                                     onClick: handleConfirmMergeAll,
-                                    className: 'w-1/2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 text-white font-bold rounded-xl text-sm shadow-lg'
-                                }, 'Execute Merge 🤝')
+                                    className: 'w-1/2 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-700 hover:from-purple-500 hover:to-indigo-600 text-white font-bold rounded-xl text-sm shadow-lg transition cursor-pointer'
+                                }, 'Execute Merge')
                             )
                         )
                     )
