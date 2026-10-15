@@ -671,11 +671,19 @@
             );
         }
 
-        function TeamEventStackedBarChart({ roster, scores, draftState, eliminationOrder }) {
-            const { useState, useMemo, useRef } = React;
-            const [selectedEp, setSelectedEp] = useState(1);
+        function TeamEventStackedBarChart({ roster, scores, draftState, eliminationOrder, viewingEpisode }) {
+            const { useState, useMemo, useRef, useEffect } = React;
+            const initialEp = Math.max(1, viewingEpisode || 1);
+            const [selectedEp, setSelectedEp] = useState(initialEp);
             const [selectedPlayerId, setSelectedPlayerId] = useState(null);
             const [hoveredPlayerId, setHoveredPlayerId] = useState(null);
+
+            useEffect(() => {
+                if (viewingEpisode && viewingEpisode > 0) {
+                    setSelectedEp(viewingEpisode);
+                    setSelectedPlayerId(null);
+                }
+            }, [viewingEpisode]);
 
             const activePlayerId = selectedPlayerId !== null ? selectedPlayerId : hoveredPlayerId;
 
@@ -690,7 +698,13 @@
                     e.stopPropagation();
                     if (e.cancelable && e.type === 'touchstart') e.preventDefault();
                 }
-                setSelectedPlayerId(prev => prev === playerId ? null : playerId);
+                setSelectedPlayerId(prev => {
+                    if (prev === playerId) {
+                        setHoveredPlayerId(null);
+                        return null;
+                    }
+                    return playerId;
+                });
             };
 
             const eventColors = {
@@ -710,7 +724,7 @@
             };
 
             const { maxEp, epDataMap, globalMaxPos, globalMaxNeg } = useMemo(() => {
-                let highestEp = 1;
+                let highestEp = Math.max(1, viewingEpisode || 1);
                 let maxPos = 15;
                 let maxNeg = 15;
                 const map = {};
@@ -723,7 +737,7 @@
                         const ep = parseInt(epStr);
                         if (!isNaN(ep)) {
                             if (ep > highestEp) highestEp = ep;
-                            if (bfEp === null || ep > bfEp) {
+                            if (bfEp === null || ep >= bfEp) {
                                 if (!map[ep]) map[ep] = {};
                                 if (!map[ep][player.id]) map[ep][player.id] = { player, totalPts: 0, posPts: 0, negPts: 0, events: [] };
                                 
@@ -763,7 +777,7 @@
                         const ep = parseInt(elimEp);
                         if (!isNaN(ep)) {
                             if (ep > highestEp) highestEp = ep;
-                            if (bfEp === null || ep > bfEp) {
+                            if (bfEp === null || ep >= bfEp) {
                                 if (!map[ep]) map[ep] = {};
                                 if (!map[ep][player.id]) map[ep][player.id] = { player, totalPts: 0, posPts: 0, negPts: 0, events: [] };
                                 map[ep][player.id].totalPts += ep;
@@ -787,7 +801,7 @@
                 });
 
                 return { maxEp: highestEp, epDataMap: map, globalMaxPos: maxPos, globalMaxNeg: maxNeg };
-            }, [roster, scores, draftState, eliminationOrder]);
+            }, [roster, scores, draftState, eliminationOrder, viewingEpisode]);
 
             const episodes = Array.from({ length: maxEp }, (_, i) => i + 1);
             const activeEpMap = epDataMap[selectedEp] || {};
@@ -827,7 +841,10 @@
                     h('div', { className: 'flex items-center gap-1.5 ml-auto sm:ml-0' },
                         h('button', {
                             type: 'button',
-                            onClick: () => setSelectedEp(prev => Math.max(1, prev - 1)),
+                            onClick: () => {
+                                setSelectedEp(prev => Math.max(1, prev - 1));
+                                setSelectedPlayerId(null);
+                            },
                             disabled: selectedEp <= 1,
                             title: 'Previous Episode',
                             className: `p-1 text-amber-400 hover:text-amber-200 cursor-pointer transition-transform hover:scale-125 select-none flex items-center justify-center ${selectedEp <= 1 ? 'opacity-0 pointer-events-none' : 'opacity-80 hover:opacity-100'}`
@@ -841,7 +858,10 @@
 
                         h('button', {
                             type: 'button',
-                            onClick: () => setSelectedEp(prev => Math.min(maxEp, prev + 1)),
+                            onClick: () => {
+                                setSelectedEp(prev => Math.min(maxEp, prev + 1));
+                                setSelectedPlayerId(null);
+                            },
                             disabled: selectedEp >= maxEp,
                             title: 'Next Episode',
                             className: `p-1 text-amber-400 hover:text-amber-200 cursor-pointer transition-transform hover:scale-125 select-none flex items-center justify-center ${selectedEp >= maxEp ? 'opacity-0 pointer-events-none' : 'opacity-80 hover:opacity-100'}`
@@ -853,7 +873,7 @@
                     )
                 ),
 
-                // Fixed Baseline Chart Layout (Height 235px, Zero baseline locked at 130px in space)
+                // Fixed Baseline Chart Layout (Height 235px, Zero baseline locked at 128px in space)
                 h('div', { className: 'relative w-full h-[235px] px-2 sm:px-[60px] pt-2 pb-7 flex items-center justify-around gap-2 sm:gap-4' },
                     roster.length === 0 ? h('div', { className: 'text-center text-slate-400 italic' }, 'No players on roster') :
                     roster.map(player => {
@@ -871,97 +891,104 @@
 
                         return h('div', {
                             key: player.id,
-                            role: 'button',
-                            tabIndex: 0,
-                            'aria-pressed': isSelected,
-                            title: `Hover, click, or tap to view all events for ${player.name} in Episode ${selectedEp}`,
-                            className: `flex-1 flex flex-col items-center h-full relative max-w-[90px] cursor-pointer transition-all duration-200 select-none group rounded-xl p-1 ${
-                                isActive 
-                                    ? 'scale-[1.05] bg-amber-950/40 ring-2 ring-amber-400/90 shadow-lg' 
-                                    : isDimmed 
-                                        ? 'opacity-35 hover:opacity-75' 
-                                        : 'hover:bg-slate-800/40 hover:scale-[1.02]'
-                            }`,
-                            onTouchStart: (e) => {
-                                touchStartXRef.current = e.touches[0].clientX;
-                                touchStartYRef.current = e.touches[0].clientY;
-                                isTouchScrollRef.current = false;
-                            },
-                            onTouchMove: (e) => {
-                                if (!isTouchScrollRef.current) {
-                                    const dx = Math.abs(e.touches[0].clientX - touchStartXRef.current);
-                                    const dy = Math.abs(e.touches[0].clientY - touchStartYRef.current);
-                                    if (dx > 8 || dy > 8) {
-                                        isTouchScrollRef.current = true;
+                            className: `flex-1 flex flex-col items-center h-full relative max-w-[90px] select-none group transition-opacity duration-200 ${
+                                isDimmed ? 'opacity-35 hover:opacity-75' : ''
+                            }`
+                        },
+                            // Interactive Graph Container: Hit target on the actual graph area, NO amber rectangle
+                            h('div', {
+                                role: 'button',
+                                tabIndex: 0,
+                                'aria-pressed': isSelected,
+                                title: `Hover, click, or tap to view all events for ${player.name} in Episode ${selectedEp}`,
+                                className: 'w-full max-w-[50px] sm:max-w-[56px] h-[180px] relative transition-transform duration-150 cursor-pointer flex flex-col items-center group',
+                                onTouchStart: (e) => {
+                                    touchStartXRef.current = e.touches[0].clientX;
+                                    touchStartYRef.current = e.touches[0].clientY;
+                                    isTouchScrollRef.current = false;
+                                },
+                                onTouchMove: (e) => {
+                                    if (!isTouchScrollRef.current) {
+                                        const dx = Math.abs(e.touches[0].clientX - touchStartXRef.current);
+                                        const dy = Math.abs(e.touches[0].clientY - touchStartYRef.current);
+                                        if (dx > 8 || dy > 8) {
+                                            isTouchScrollRef.current = true;
+                                        }
+                                    }
+                                },
+                                onTouchEnd: (e) => {
+                                    if (!isTouchScrollRef.current) {
+                                        lastPlayerTouchTimeRef.current = Date.now();
+                                        handlePlayerToggle(player.id, e);
+                                    }
+                                },
+                                onMouseEnter: () => setHoveredPlayerId(player.id),
+                                onMouseLeave: () => setHoveredPlayerId(null),
+                                onClick: (e) => {
+                                    if (Date.now() - lastPlayerTouchTimeRef.current < 450) {
+                                        return;
+                                    }
+                                    handlePlayerToggle(player.id, e);
+                                },
+                                onKeyDown: (e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        handlePlayerToggle(player.id, e);
                                     }
                                 }
                             },
-                            onTouchEnd: (e) => {
-                                if (!isTouchScrollRef.current) {
-                                    lastPlayerTouchTimeRef.current = Date.now();
-                                    handlePlayerToggle(player.id, e);
-                                }
-                            },
-                            onMouseEnter: () => setHoveredPlayerId(player.id),
-                            onMouseLeave: () => setHoveredPlayerId(null),
-                            onClick: (e) => {
-                                if (Date.now() - lastPlayerTouchTimeRef.current < 450) {
-                                    return;
-                                }
-                                handlePlayerToggle(player.id, e);
-                            },
-                            onKeyDown: (e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    handlePlayerToggle(player.id, e);
-                                }
-                            }
-                        },
-                            // Net Pts Label
-                            h('div', {
-                                className: `text-xs font-black absolute text-center w-full transition-colors ${
-                                    isActive ? 'text-amber-300 drop-shadow-md' :
-                                    netPts > 0 ? 'text-emerald-400' : 
-                                    netPts < 0 ? 'text-red-400' : 'text-slate-400'
-                                }`,
-                                style: { top: `${netPts > 0 ? 130 - posPx - 18 : netPts < 0 ? 130 + negPx + 4 : 110}px` }
-                            }, `${netPts > 0 ? `+${netPts}` : netPts} pts`),
+                                // Net Pts Label
+                                h('div', {
+                                    className: `text-xs font-black absolute text-center w-full transition-colors ${
+                                        isActive ? 'text-amber-300 drop-shadow-md' :
+                                        netPts > 0 ? 'text-emerald-400' : 
+                                        netPts < 0 ? 'text-red-400' : 'text-slate-400'
+                                    }`,
+                                    style: { top: `${netPts > 0 ? 128 - posPx - 18 : netPts < 0 ? 128 + negPx + 4 : 108}px` }
+                                }, `${netPts}`),
 
-                            // Positive Stack Container (radiating upward from 130px)
-                            posPx > 0 && h('div', {
-                                className: `w-full max-w-[44px] bg-slate-800/60 rounded-t-lg overflow-hidden flex flex-col-reverse shadow-xs border transition-colors absolute ${
-                                    isActive ? 'border-amber-400/90 shadow-amber-500/20' : 'border-amber-900/40'
-                                }`,
-                                style: { height: `${posPx}px`, top: `${130 - posPx}px` }
-                            },
-                                posEvents.map((ev, evIdx) => {
-                                    const segPct = (ev.pts / (pData.posPts || 1)) * 100;
-                                    return h('div', {
-                                        key: evIdx,
-                                        style: { height: `${segPct}%`, backgroundColor: ev.col },
-                                        className: 'w-full border-b border-white/20'
-                                    });
-                                })
+                                // Zero baseline indicator marker (tick)
+                                h('div', {
+                                    className: `absolute w-6 h-[2px] rounded-full transition-colors ${isActive ? 'bg-amber-400' : 'bg-slate-600/60'}`,
+                                    style: { top: '128px' }
+                                }),
+
+                                // Positive Stack Container (radiating upward from 128px)
+                                posPx > 0 && h('div', {
+                                    className: `w-full max-w-[42px] bg-slate-800/60 rounded-t-lg overflow-hidden flex flex-col-reverse shadow-xs border border-amber-900/40 transition-all absolute group-hover:brightness-110 ${
+                                        isActive ? 'brightness-110 drop-shadow-[0_0_6px_rgba(251,191,36,0.35)]' : ''
+                                    }`,
+                                    style: { height: `${posPx}px`, top: `${128 - posPx}px` }
+                                },
+                                    posEvents.map((ev, evIdx) => {
+                                        const segPct = (ev.pts / (pData.posPts || 1)) * 100;
+                                        return h('div', {
+                                            key: evIdx,
+                                            style: { height: `${segPct}%`, backgroundColor: ev.col },
+                                            className: 'w-full border-b border-white/20'
+                                        });
+                                    })
+                                ),
+
+                                // Negative Stack Container (radiating downward from 128px)
+                                negPx > 0 && h('div', {
+                                    className: `w-full max-w-[42px] bg-red-950/40 rounded-b-lg overflow-hidden flex flex-col shadow-xs border border-red-900/60 transition-all absolute group-hover:brightness-110 ${
+                                        isActive ? 'brightness-110 drop-shadow-[0_0_6px_rgba(239,68,68,0.35)]' : ''
+                                    }`,
+                                    style: { height: `${negPx}px`, top: '128px' }
+                                },
+                                    negEvents.map((ev, evIdx) => {
+                                        const segPct = (Math.abs(ev.pts) / (pData.negPts || 1)) * 100;
+                                        return h('div', {
+                                            key: evIdx,
+                                            style: { height: `${segPct}%`, backgroundColor: ev.col },
+                                            className: 'w-full border-t border-white/20'
+                                        });
+                                    })
+                                )
                             ),
 
-                            // Negative Stack Container (radiating downward from 130px)
-                            negPx > 0 && h('div', {
-                                className: `w-full max-w-[44px] bg-red-950/40 rounded-b-lg overflow-hidden flex flex-col shadow-xs border transition-colors absolute ${
-                                    isActive ? 'border-amber-400/90 shadow-amber-500/20' : 'border-red-900/60'
-                                }`,
-                                style: { height: `${negPx}px`, top: '130px' }
-                            },
-                                negEvents.map((ev, evIdx) => {
-                                    const segPct = (Math.abs(ev.pts) / (pData.negPts || 1)) * 100;
-                                    return h('div', {
-                                        key: evIdx,
-                                        style: { height: `${segPct}%`, backgroundColor: ev.col },
-                                        className: 'w-full border-t border-white/20'
-                                    });
-                                })
-                            ),
-
-                            // Castaway Name Label at bottom
+                            // Castaway Name Label at bottom (outside graph & outside lit rectangle)
                             h('div', {
                                 className: `absolute -bottom-1 text-center w-full px-0.5 truncate transition-all ${
                                     isActive ? 'text-amber-300 font-black' : 'text-slate-300 font-extrabold'
@@ -983,9 +1010,9 @@
                         h('div', { className: 'flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-800' },
                             h('div', { className: 'flex items-center gap-2' },
                                 h('span', { className: 'text-xs font-black text-amber-400 uppercase tracking-wide' },
-                                    `All Events for ${activePlayer.name} in Episode ${selectedEp}`
+                                    `Episode ${selectedEp} Details: ${activePlayer.name}`
                                 ),
-                                isPlayerLocked && h('span', { className: 'text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-500/60 px-2 py-0.5 rounded-full' }, 'Locked ✓')
+                                isPlayerLocked && h('span', { className: 'text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-500/60 px-2 py-0.5 rounded-full' }, 'Pinned ✓')
                             ),
                             h('div', { className: 'flex items-center gap-2' },
                                 h('span', { className: `text-xs font-black px-2 py-0.5 rounded border ${(activePlayerData && activePlayerData.totalPts < 0) ? 'text-red-400 bg-red-950/80 border-red-500/40' : 'text-emerald-400 bg-emerald-950/80 border-emerald-500/40'}` },
@@ -996,9 +1023,10 @@
                                     onClick: (e) => {
                                         e.stopPropagation();
                                         setSelectedPlayerId(null);
+                                        setHoveredPlayerId(null);
                                     },
-                                    className: 'text-xs text-amber-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded border border-slate-700 hover:border-amber-400/50 transition-colors'
-                                }, '✕ Show All Team')
+                                    className: 'text-xs text-amber-300 hover:text-white bg-slate-800 hover:bg-slate-700 px-2 py-0.5 rounded border border-slate-700 hover:border-amber-400/50 transition-colors cursor-pointer'
+                                }, '✕ Show All Events')
                             )
                         ),
 
@@ -1029,19 +1057,19 @@
                         )
                     )
                 ) : (
-                    // 2. All-Team Events Overview for Selected Episode
-                    h('div', { className: 'mt-3 p-3 bg-slate-950/90 text-white rounded-xl border border-amber-500/30 shadow-xl space-y-2' },
+                    // 2. All-Team Events Overview for Selected Episode (Default View)
+                    h('div', { className: 'mt-3 p-3 bg-slate-950/90 text-white rounded-xl border border-amber-500/30 shadow-xl space-y-2 animate-fadeIn' },
                         h('div', { className: 'flex items-center justify-between flex-wrap gap-2 pb-1.5 border-b border-slate-800/80' },
                             h('div', { className: 'flex items-center gap-2' },
                                 h('span', { className: 'text-xs font-black text-amber-400 uppercase tracking-wide' },
-                                    `Episode ${selectedEp} Team Events`
+                                    `Episode ${selectedEp} Events`
                                 ),
                                 h('span', { className: 'text-[10px] text-amber-200/70 font-semibold bg-slate-900 px-2 py-0.5 rounded-full border border-amber-500/20' },
                                     `${allTeamEvents.length} event${allTeamEvents.length === 1 ? '' : 's'}`
                                 )
                             ),
                             h('span', { className: 'text-[11px] text-slate-400 italic hidden sm:inline' },
-                                '💡 Hover, click, or tap a castaway above to filter'
+                                '💡 Hover, click, or tap a graph above to filter'
                             )
                         ),
 
@@ -1109,9 +1137,8 @@
             const nonPosItems = items.filter(item => item.score <= 0);
 
             return h('div', { className: 'bg-slate-900/90 border border-amber-500/30 rounded-xl p-4 mb-4 backdrop-blur-md shadow-xl text-slate-100' },
-                h('div', { className: 'flex justify-between items-center mb-3 flex-wrap gap-2' },
-                    h('span', { className: 'font-extrabold text-xs text-amber-400 uppercase tracking-wider' }, 'ROSTER POINT CONTRIBUTION'),
-                    h('span', { className: 'text-xs font-black text-amber-200' }, `Team Score: ${totalTeamScore >= 0 ? `+${totalTeamScore}` : totalTeamScore} pts`)
+                h('div', { className: 'mb-3' },
+                    h('span', { className: 'font-extrabold text-xs text-amber-400 uppercase tracking-wider' }, 'ROSTER POINT CONTRIBUTION')
                 ),
 
                 // Full-width Stacked Horizontal Rectangle Bar
@@ -1236,7 +1263,7 @@
                         roster.forEach(player => {
                             let pEpPts = 0;
                             const bfEp = getBackfillEpisode(player.id, draftState);
-                            if (bfEp === null || ep > bfEp) {
+                            if (bfEp === null || ep >= bfEp) {
                                 const playerScores = (scores[player.id] || {})[ep] || {};
                                 if (playerScores && typeof playerScores === 'object') {
                                     Object.values(playerScores).forEach(score => {
@@ -2961,8 +2988,8 @@
                     if (typeof playerScores === 'object' && playerScores !== null) {
                         Object.keys(playerScores).forEach(ep => {
                             const epNum = parseInt(ep);
-                            // Exclude points earned in episodes prior to or during the backfill episode
-                            if (bfEp !== null && epNum <= bfEp) return;
+                            // Exclude points earned in episodes prior to the backfill episode
+                            if (bfEp !== null && epNum < bfEp) return;
                             
                             const episodeScores = playerScores[ep] || {};
                             if (typeof episodeScores === 'object' && episodeScores !== null) {
@@ -2981,7 +3008,7 @@
                     const elimEp = activeEliminationOrder && (activeEliminationOrder[player.id] || activeEliminationOrder[String(player.id)]);
                     if (elimEp) {
                         const episode = parseInt(elimEp) || 0;
-                        if (bfEp === null || episode > bfEp) {
+                        if (bfEp === null || episode >= bfEp) {
                             total += episode;
                         }
                     }
@@ -3108,7 +3135,7 @@
                 if (typeof playerScores === 'object' && playerScores !== null) {
                     Object.keys(playerScores).forEach(ep => {
                         const epNum = parseInt(ep);
-                        if (bfEp !== null && epNum <= bfEp) return; // Exclude pre-backfill points from team score
+                        if (bfEp !== null && epNum < bfEp) return; // Exclude pre-backfill points from team score
                         
                         const episodeScores = playerScores[ep];
                         if (typeof episodeScores === 'object' && episodeScores !== null) {
@@ -3127,7 +3154,7 @@
                 const elimEp = activeEliminationOrder && (activeEliminationOrder[playerId] || activeEliminationOrder[pId]);
                 if (elimEp) {
                     const episode = parseInt(elimEp) || 0;
-                    if (bfEp === null || episode > bfEp) {
+                    if (bfEp === null || episode >= bfEp) {
                         total += episode;
                     }
                 }
@@ -3144,7 +3171,7 @@
                 if (typeof playerScores === 'object' && playerScores !== null) {
                     Object.keys(playerScores).forEach(ep => {
                         const epNum = parseInt(ep);
-                        const isPreBackfill = bfEp !== null && epNum <= bfEp;
+                        const isPreBackfill = bfEp !== null && epNum < bfEp;
                         const episodeScores = playerScores[ep] || {};
                         if (typeof episodeScores === 'object' && episodeScores !== null) {
                             Object.keys(episodeScores).forEach(scoreId => {
@@ -3191,7 +3218,7 @@
                 const elimEp = activeEliminationOrder && (activeEliminationOrder[playerId] || activeEliminationOrder[pId]);
                 if (elimEp) {
                     const episode = parseInt(elimEp) || 1;
-                    const isPreBackfill = bfEp !== null && episode <= bfEp;
+                    const isPreBackfill = bfEp !== null && episode < bfEp;
                     const placement = Math.max(1, 25 - episode);
                     breakdown.push({
                         episode: episode,
@@ -3492,7 +3519,7 @@
                                         h(TeamRosterContributionBar, { roster: team.roster, getPlayerScore: getPlayerScore }),
                                         
                                         // 2. Episode Point Category Stacked Bar Chart
-                                        h(TeamEventStackedBarChart, { roster: team.roster, scores: activeScores, draftState: draftState, eliminationOrder: activeEliminationOrder }),
+                                        h(TeamEventStackedBarChart, { roster: team.roster, scores: activeScores, draftState: draftState, eliminationOrder: activeEliminationOrder, viewingEpisode: viewingEpisode }),
 
                                         // 3. Detailed Player Breakdown List
                                         team.roster.length === 0 ? 
@@ -3500,7 +3527,8 @@
                                             team.roster.map(player => {
                                                 const playerScore = getPlayerScore(player.id);
                                                 const breakdown = getPlayerBreakdown(player.id);
-                                                const isEliminated = activeEliminationOrder && (activeEliminationOrder[player.id] !== undefined || activeEliminationOrder[String(player.id)] !== undefined);
+                                                const elimEp = activeEliminationOrder && (activeEliminationOrder[player.id] !== undefined ? activeEliminationOrder[player.id] : activeEliminationOrder[String(player.id)]);
+                                                const isEliminated = elimEp !== undefined && elimEp !== null && elimEp !== false;
                                                 const isWinner = activeWinner && parseInt(activeWinner) === player.id;
                                                 const isBackfilled = draftState && draftState.backfilledPlayers && draftState.backfilledPlayers[player.id];
                                                 
@@ -3525,7 +3553,7 @@
                                                     playerHeaderChildren.push(h('span', { key: 'winner', className: 'text-xs text-yellow-600 font-bold' }, '👑 SOLE SURVIVOR'));
                                                 }
                                                 if (isEliminated && !isWinner) {
-                                                    playerHeaderChildren.push(h('span', { key: 'elim', className: 'text-[10px] bg-red-600 text-white font-black px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-red-300/40' }, `💀 VOTED OUT (EP ${isEliminated})`));
+                                                    playerHeaderChildren.push(h('span', { key: 'elim', className: 'text-[10px] bg-red-600 text-white font-black px-2 py-0.5 rounded-full shadow-sm flex items-center gap-1 border border-red-300/40' }, `💀 VOTED OUT (EP ${elimEp})`));
                                                 }
                                                 if (isBackfilled) {
                                                     const bfEp = getBackfillEpisode(player.id, draftState);
