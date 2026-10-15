@@ -94,6 +94,9 @@ const PRIMARY_COLOR_PALETTES = {
         badgeBg: 'bg-amber-100',
         badgeText: 'text-amber-900',
         badgeBorder: 'border-amber-300',
+        darkBadgeBg: 'bg-amber-950/80',
+        darkBadgeText: 'text-amber-200',
+        darkBadgeBorder: 'border-amber-500/60',
         cardBg: 'bg-amber-50',
         borderColor: 'border-amber-400',
         dotBg: 'bg-amber-400 border border-amber-200'
@@ -106,6 +109,9 @@ const PRIMARY_COLOR_PALETTES = {
         badgeBg: 'bg-purple-100',
         badgeText: 'text-purple-900',
         badgeBorder: 'border-purple-300',
+        darkBadgeBg: 'bg-purple-950/80',
+        darkBadgeText: 'text-purple-200',
+        darkBadgeBorder: 'border-purple-500/60',
         cardBg: 'bg-purple-50',
         borderColor: 'border-purple-400',
         dotBg: 'bg-purple-500 border border-purple-300'
@@ -118,6 +124,9 @@ const PRIMARY_COLOR_PALETTES = {
         badgeBg: 'bg-blue-100',
         badgeText: 'text-blue-900',
         badgeBorder: 'border-blue-300',
+        darkBadgeBg: 'bg-blue-950/80',
+        darkBadgeText: 'text-blue-200',
+        darkBadgeBorder: 'border-blue-500/60',
         cardBg: 'bg-blue-50',
         borderColor: 'border-blue-400',
         dotBg: 'bg-blue-500 border border-blue-300'
@@ -130,6 +139,9 @@ const PRIMARY_COLOR_PALETTES = {
         badgeBg: 'bg-emerald-100',
         badgeText: 'text-emerald-900',
         badgeBorder: 'border-emerald-300',
+        darkBadgeBg: 'bg-emerald-950/80',
+        darkBadgeText: 'text-emerald-200',
+        darkBadgeBorder: 'border-emerald-500/60',
         cardBg: 'bg-emerald-50',
         borderColor: 'border-emerald-400',
         dotBg: 'bg-emerald-500 border border-emerald-300'
@@ -142,6 +154,9 @@ const PRIMARY_COLOR_PALETTES = {
         badgeBg: 'bg-red-100',
         badgeText: 'text-red-900',
         badgeBorder: 'border-red-300',
+        darkBadgeBg: 'bg-red-950/80',
+        darkBadgeText: 'text-red-200',
+        darkBadgeBorder: 'border-red-500/60',
         cardBg: 'bg-red-50',
         borderColor: 'border-red-400',
         dotBg: 'bg-red-500 border border-red-300'
@@ -154,6 +169,9 @@ const PRIMARY_COLOR_PALETTES = {
         badgeBg: 'bg-orange-100',
         badgeText: 'text-orange-900',
         badgeBorder: 'border-orange-300',
+        darkBadgeBg: 'bg-orange-950/80',
+        darkBadgeText: 'text-orange-200',
+        darkBadgeBorder: 'border-orange-500/60',
         cardBg: 'bg-orange-50',
         borderColor: 'border-orange-400',
         dotBg: 'bg-orange-500 border border-orange-300'
@@ -166,6 +184,9 @@ const PRIMARY_COLOR_PALETTES = {
         badgeBg: 'bg-pink-100',
         badgeText: 'text-pink-900',
         badgeBorder: 'border-pink-300',
+        darkBadgeBg: 'bg-pink-950/80',
+        darkBadgeText: 'text-pink-200',
+        darkBadgeBorder: 'border-pink-500/60',
         cardBg: 'bg-pink-50',
         borderColor: 'border-pink-400',
         dotBg: 'bg-pink-500 border border-pink-300'
@@ -178,6 +199,9 @@ const PRIMARY_COLOR_PALETTES = {
         badgeBg: 'bg-slate-900',
         badgeText: 'text-slate-100',
         badgeBorder: 'border-slate-700',
+        darkBadgeBg: 'bg-slate-900/80',
+        darkBadgeText: 'text-slate-200',
+        darkBadgeBorder: 'border-slate-500/60',
         cardBg: 'bg-slate-900/60',
         borderColor: 'border-slate-700',
         dotBg: 'bg-slate-800 border border-slate-600'
@@ -190,6 +214,9 @@ const PRIMARY_COLOR_PALETTES = {
         badgeBg: 'bg-slate-800',
         badgeText: 'text-slate-300',
         badgeBorder: 'border-slate-600',
+        darkBadgeBg: 'bg-slate-800/80',
+        darkBadgeText: 'text-slate-300',
+        darkBadgeBorder: 'border-slate-600/60',
         cardBg: 'bg-slate-950/40',
         borderColor: 'border-slate-800/80',
         dotBg: 'bg-slate-400 border border-slate-300'

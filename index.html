@@ -2612,6 +2612,8 @@
                 })).sort((a, b) => b.score - a.score);
             }, [playerTeams, activeScores, activeEliminationOrder, activeWinner, players]);
             
+            const customTribesList = (seasonData && seasonData.customTribes) ? seasonData.customTribes : [];
+
             const getTribeBadgeColor = (tribe) => {
                 if (tribe === 'Cila') return 'bg-orange-950/80 text-orange-200 border border-orange-500/60 shadow-sm';
                 if (tribe === 'Kalo') return 'bg-teal-950/80 text-teal-200 border border-teal-500/60 shadow-sm';
@@ -2619,12 +2621,20 @@
                 if (tribe === 'Toka') return 'bg-amber-950/80 text-amber-200 border border-amber-500/60 shadow-sm';
                 if (tribe === 'Savu') return 'bg-purple-950/80 text-purple-200 border border-purple-500/60 shadow-sm';
                 if (tribe === 'Exile Island') return 'bg-slate-900/80 text-slate-200 border border-slate-500/60 shadow-sm';
+                if (tribe === 'Unassigned') return 'bg-slate-800/80 text-slate-300 border border-slate-600/60 shadow-sm';
+
+                if (typeof window.getTribeStyle === 'function') {
+                    const customStyle = window.getTribeStyle(tribe, customTribesList);
+                    if (customStyle) {
+                        return `${customStyle.darkBadgeBg || customStyle.badgeBg} ${customStyle.darkBadgeText || customStyle.badgeText} border ${customStyle.darkBadgeBorder || customStyle.badgeBorder} shadow-sm`;
+                    }
+                }
                 return 'bg-slate-800 text-slate-200 border border-slate-600';
             };
             
             const getTribeIcon = (t) => {
                 const dotColor = typeof window.getTribeDotColor === 'function' 
-                    ? window.getTribeDotColor(t) 
+                    ? window.getTribeDotColor(t, customTribesList) 
                     : (t === 'Cila' ? 'bg-red-500 border border-red-300' :
                        t === 'Kalo' ? 'bg-blue-500 border border-blue-300' :
                        t === 'Vatu' ? 'bg-purple-600 border border-purple-300' :
@@ -3307,14 +3317,24 @@
 
                                     // Player Selection Box Grid (Tribe Grouped)
                                     h('div', { className: 'bg-slate-50 border border-slate-200 rounded-xl p-4' },
-                                        h('div', { className: 'flex justify-between items-center mb-3' },
-                                            h('label', { className: 'block text-sm font-bold text-gray-800' }, 'Player Selection'),
+                                        h('div', { className: 'flex justify-between items-center mb-3 flex-wrap gap-2' },
+                                            h('div', { className: 'flex items-center gap-2.5' },
+                                                h('label', { className: 'block text-sm font-bold text-gray-800' }, 'Player Selection'),
+                                                h('a', {
+                                                    href: `draft.html?league=${activeLeagueId}&season=${activeSeasonId}&openBulkEdit=true&ep=${lastSelectedEpisode || 1}`,
+                                                    className: 'inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-lg border border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 transition cursor-pointer shadow-xs',
+                                                    title: 'Edit Tribes in Bulk Tribe Dashboard'
+                                                },
+                                                    h('span', { className: 'text-sm' }, '🏕️'),
+                                                    h('span', {}, 'Edit Tribe')
+                                                )
+                                            ),
                                             h('div', { className: 'flex items-center gap-2' },
                                                 h('span', { className: 'text-xs text-orange-700 font-extrabold bg-orange-100 px-2.5 py-1 rounded-lg border border-orange-200' }, `${selectedPlayerIds.length} player(s) selected`),
                                                 selectedPlayerIds.length > 0 && h('button', {
                                                     type: 'button',
                                                     onClick: () => setSelectedPlayerIds([]),
-                                                    className: 'text-xs bg-red-500 text-white font-bold px-2.5 py-1 rounded-lg hover:bg-red-600 transition shadow-sm'
+                                                    className: 'text-xs bg-red-500 text-white font-bold px-2.5 py-1 rounded-lg hover:bg-red-600 transition shadow-sm cursor-pointer'
                                                 }, 'Clear')
                                             )
                                         ),
