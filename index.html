@@ -2137,7 +2137,7 @@
                 { id: 21, name: "Sharonda Cox", tribe: "Savu", startingTribe: "Savu", age: 34, occupation: "OBGYN Resident", hometown: "Richmond, KY", image: "https://www.paramountplus.com/sneak-peak/wp-content/uploads/2026/09/image-99-1024x683.jpeg" }
             ];
             
-            const scoringCategories = [
+            const DEFAULT_SCORING_CATEGORIES = [
                 // First to Drop
                 { id: 'solo-immunity', name: 'Wins Solo Immunity', points: 25, category: 'First to Drop' },
                 { id: 'tribe-immunity', name: 'Wins Tribe Immunity', points: 15, category: 'First to Drop' },
@@ -2162,7 +2162,7 @@
                 { id: 'uses-idol-ally', name: 'Uses Hidden Immunity Idol On Somebody Else', points: 3, category: 'Tribal Council' },
                 { id: 'idol-used-them', name: 'Has Hidden Immunity Idol Used On Them', points: 5, category: 'Tribal Council' },
                 { id: 'voted-out', name: 'Gets Voted Out', points: -25, category: 'Tribal Council' },
-                { id: 'votes-survived', name: 'Gets Votes and Survives (0.5 × # of votes)', points: 0.5, category: 'Tribal Council' },
+                { id: 'votes-survived', name: 'Gets Votes and Survives (1 pt per vote)', points: 1, category: 'Tribal Council' },
                 { id: 'pulls-rock', name: 'Pulls a Rock', points: 1, category: 'Tribal Council' },
                 { id: 'first-voted-out', name: 'First Voted Out', points: -10, category: 'Tribal Council' },
                 { id: 'wins-fire', name: 'Wins Fire Making Challenge', points: 5, category: 'Tribal Council' },
@@ -2287,6 +2287,7 @@
             const [selectedCategoryId, setSelectedCategoryId] = useState('');
             const [rulesSearchTerm, setRulesSearchTerm] = useState('');
             const [selectedPlayerIds, setSelectedPlayerIds] = useState([]);
+            const [votesReceived, setVotesReceived] = useState('');
             
             useEffect(() => {
                 if (showAddScore) {
@@ -2294,8 +2295,67 @@
                     setCategorySearchTerm('');
                     setSelectedCategoryId('');
                     setSelectedPlayerIds([]);
+                    setVotesReceived('');
                 }
             }, [showAddScore]);
+
+            const ensureArray = (val) => {
+                if (!val) return [];
+                if (Array.isArray(val)) return val;
+                if (typeof val === 'object') return Object.values(val);
+                return [];
+            };
+
+            const resolveSeasonScoringCategories = (seasonId, sData) => {
+                // 1. In-memory seasonData
+                if (sData?.scoringCategories && ensureArray(sData.scoringCategories).length > 0) {
+                    return ensureArray(sData.scoringCategories);
+                }
+                // 2. Check localStorage cache for this season
+                try {
+                    const cached = localStorage.getItem(`survivor-seasonData-${seasonId}`);
+                    if (cached) {
+                        const parsed = JSON.parse(cached);
+                        if (parsed?.scoringCategories && ensureArray(parsed.scoringCategories).length > 0) {
+                            return ensureArray(parsed.scoringCategories);
+                        }
+                    }
+                } catch(e) {}
+
+                // 3. Inheritance for new seasons (e.g. Season 52+ inheriting from Season 51):
+                const match = seasonId ? String(seasonId).match(/season-(\d+)/) : null;
+                if (match) {
+                    const currentNum = parseInt(match[1]);
+                    if (currentNum > 51) {
+                        const prevSeasonId = `season-${currentNum - 1}`;
+                        try {
+                            const prevCached = localStorage.getItem(`survivor-seasonData-${prevSeasonId}`);
+                            if (prevCached) {
+                                const parsed = JSON.parse(prevCached);
+                                if (parsed?.scoringCategories && ensureArray(parsed.scoringCategories).length > 0) {
+                                    return ensureArray(parsed.scoringCategories);
+                                }
+                            }
+                        } catch(e) {}
+                    }
+                }
+
+                // 4. Fallback for Season 50 if preset hasn't loaded yet
+                if (seasonId === 'season-50') {
+                    return DEFAULT_SCORING_CATEGORIES.map(c => 
+                        c.id === 'votes-survived' 
+                            ? { ...c, name: 'Gets Votes and Survives (0.5 × # of votes)', points: 0.5 }
+                            : c
+                    );
+                }
+
+                // 5. Default fallback (Season 51 standard)
+                return DEFAULT_SCORING_CATEGORIES;
+            };
+
+            const scoringCategories = useMemo(() => {
+                return resolveSeasonScoringCategories(activeSeasonId, seasonData);
+            }, [activeSeasonId, seasonData]);
 
             const filteredScoringCategories = useMemo(() => {
                 if (!categorySearchTerm.trim()) return scoringCategories;
@@ -2319,13 +2379,6 @@
                 });
                 return groups;
             }, [rulesSearchTerm, scoringCategories]);
-            
-            const ensureArray = (val) => {
-                if (!val) return [];
-                if (Array.isArray(val)) return val;
-                if (typeof val === 'object') return Object.values(val);
-                return [];
-            };
 
             // Load season preset data & subscribe to real-time season updates across all leagues
             useEffect(() => {
@@ -2350,20 +2403,29 @@
                             ? ensureArray(localData.customTribes)
                             : ensureArray(preset.customTribes));
 
+                    const activeScoring = (fb.scoringCategories && ensureArray(fb.scoringCategories).length > 0)
+                        ? ensureArray(fb.scoringCategories)
+                        : ((preset.scoringCategories && ensureArray(preset.scoringCategories).length > 0)
+                            ? ensureArray(preset.scoringCategories)
+                            : ((localData?.scoringCategories && ensureArray(localData.scoringCategories).length > 0)
+                                ? ensureArray(localData.scoringCategories)
+                                : null));
+
                     setSeasonData(prev => {
                         const merged = {
                             ...preset,
                             ...localData,
                             ...fb,
                             contestants: activeContestants.length > 0 ? activeContestants : (prev?.contestants || []),
-                            customTribes: activeCustom.length > 0 ? activeCustom : (prev?.customTribes || [])
+                            customTribes: activeCustom.length > 0 ? activeCustom : (prev?.customTribes || []),
+                            scoringCategories: activeScoring || prev?.scoringCategories || null
                         };
                         try { localStorage.setItem(`survivor-seasonData-${activeSeasonId}`, JSON.stringify(merged)); } catch(e) {}
                         return merged;
                     });
                 };
 
-                fetch('seasons/' + activeSeasonId + '.json')
+                fetch('seasons/' + activeSeasonId + '.json?v=' + Date.now())
                     .then(res => res.json())
                     .then(presetData => {
                         currentPreset = presetData;
@@ -2451,23 +2513,29 @@
                 return Array.from(tribes);
             }, [activeSeasonId, seasonData]);
 
-            const saveSeasonDataToFirebase = async (newContestants, newCustomTribes) => {
+            const saveSeasonDataToFirebase = async (newContestants, newCustomTribes, newScoringCategories) => {
                 const updatedContestants = newContestants !== undefined ? ensureArray(newContestants) : ensureArray(seasonData?.contestants);
                 const updatedCustomTribes = newCustomTribes !== undefined ? ensureArray(newCustomTribes) : ensureArray(seasonData?.customTribes);
+                const updatedScoringCategories = newScoringCategories !== undefined ? ensureArray(newScoringCategories) : (seasonData?.scoringCategories ? ensureArray(seasonData.scoringCategories) : null);
 
                 const updatedSeasonData = {
                     ...(seasonData || {}),
                     contestants: updatedContestants,
-                    customTribes: updatedCustomTribes
+                    customTribes: updatedCustomTribes,
+                    ...(updatedScoringCategories ? { scoringCategories: updatedScoringCategories } : {})
                 };
 
                 setSeasonData(updatedSeasonData);
 
                 if (window.firebaseInitialized) {
-                    await database.ref(`seasons/${activeSeasonId}`).update({
+                    const updates = {
                         contestants: updatedContestants,
                         customTribes: updatedCustomTribes
-                    });
+                    };
+                    if (updatedScoringCategories) {
+                        updates.scoringCategories = updatedScoringCategories;
+                    }
+                    await database.ref(`seasons/${activeSeasonId}`).update(updates);
                 }
                 localStorage.setItem(`survivor-seasonData-${activeSeasonId}`, JSON.stringify(updatedSeasonData));
             };
@@ -4064,7 +4132,15 @@
                                                 setSelectedCategoryId(catId);
                                                 const selected = scoringCategories.find(c => c.id === catId);
                                                 if (selected) {
-                                                    document.getElementById('points-input').value = selected.points;
+                                                    if (catId === 'votes-survived') {
+                                                        setVotesReceived('');
+                                                        const ptsInput = document.getElementById('points-input');
+                                                        if (ptsInput) ptsInput.value = '';
+                                                    } else {
+                                                        setVotesReceived('');
+                                                        const ptsInput = document.getElementById('points-input');
+                                                        if (ptsInput) ptsInput.value = selected.points;
+                                                    }
                                                 }
                                             }
                                         },
@@ -4085,7 +4161,15 @@
                                                         type: 'button',
                                                         onClick: () => {
                                                             setSelectedCategoryId(cat.id);
-                                                            document.getElementById('points-input').value = cat.points;
+                                                            if (cat.id === 'votes-survived') {
+                                                                setVotesReceived('');
+                                                                const ptsInput = document.getElementById('points-input');
+                                                                if (ptsInput) ptsInput.value = '';
+                                                            } else {
+                                                                setVotesReceived('');
+                                                                const ptsInput = document.getElementById('points-input');
+                                                                if (ptsInput) ptsInput.value = cat.points;
+                                                            }
                                                             setCategorySearchTerm('');
                                                         },
                                                         className: `w-full text-left p-2 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
@@ -4104,15 +4188,70 @@
                                         )
                                     ),
                                     
-                                    // Points (auto-filled but editable)
-                                    h('div', {},
-                                        h('label', { className: 'block text-sm font-bold text-gray-700 mb-2' }, 'Points'),
-                                        h('input', {
-                                            id: 'points-input',
-                                            type: 'number',
-                                            className: 'w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:outline-none',
-                                            placeholder: 'Auto-filled by category'
-                                        })
+                                    // Votes Received & Points Awarded (replaces standalone points when votes-survived is selected)
+                                    selectedCategoryId === 'votes-survived' ? h('div', { 
+                                        style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', alignItems: 'center' } 
+                                    },
+                                        // Left side: # of Votes Received
+                                        h('div', { style: { minWidth: 0 } },
+                                            h('label', { 
+                                                htmlFor: 'votes-received-input',
+                                                className: 'block text-sm font-bold text-gray-700 mb-2' 
+                                            }, '# of Votes Received'),
+                                            h('input', {
+                                                id: 'votes-received-input',
+                                                type: 'number',
+                                                min: '1',
+                                                step: '1',
+                                                value: votesReceived,
+                                                placeholder: 'e.g., 3',
+                                                onChange: (e) => {
+                                                    const val = e.target.value;
+                                                    setVotesReceived(val);
+                                                    const ptsPerVote = (scoringCategories.find(c => c.id === 'votes-survived') || {}).points || 1;
+                                                    const num = parseFloat(val);
+                                                    const total = (!isNaN(num) && num > 0) ? num * ptsPerVote : '';
+                                                    const ptsInput = document.getElementById('points-input');
+                                                    if (ptsInput) ptsInput.value = total;
+                                                },
+                                                className: 'w-full h-[52px] px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:outline-none font-bold text-xl text-gray-900 bg-white'
+                                            })
+                                        ),
+                                        // Right side: Points Awarded
+                                        h('div', { style: { minWidth: 0 } },
+                                            h('label', { 
+                                                className: 'block text-sm font-bold text-gray-700 mb-2' 
+                                            }, 'Points Awarded'),
+                                            (() => {
+                                                const ptsPerVote = (scoringCategories.find(c => c.id === 'votes-survived') || {}).points || 1;
+                                                const num = parseFloat(votesReceived);
+                                                const total = (!isNaN(num) && num > 0) ? num * ptsPerVote : 0;
+                                                return h('div', {
+                                                    className: 'w-full h-[52px] px-4 py-3 border-2 border-gray-300 rounded-xl bg-gray-50 flex items-center justify-center font-black text-2xl text-green-700'
+                                                }, total > 0 ? `+${total}` : '0');
+                                            })(),
+                                            // Hidden points input for form submission
+                                            h('input', {
+                                                id: 'points-input',
+                                                type: 'hidden',
+                                                value: (() => {
+                                                    const ptsPerVote = (scoringCategories.find(c => c.id === 'votes-survived') || {}).points || 1;
+                                                    const num = parseFloat(votesReceived);
+                                                    return (!isNaN(num) && num > 0) ? String(num * ptsPerVote) : '';
+                                                })()
+                                            })
+                                        )
+                                    ) : (
+                                        // Points (auto-filled but editable)
+                                        h('div', {},
+                                            h('label', { className: 'block text-sm font-bold text-gray-700 mb-2' }, 'Points'),
+                                            h('input', {
+                                                id: 'points-input',
+                                                type: 'number',
+                                                className: 'w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-orange-500 focus:outline-none',
+                                                placeholder: 'Auto-filled by category'
+                                            })
+                                        )
                                     ),
                                     
                                     // Optional Note
@@ -4150,12 +4289,25 @@
                                             
                                             const episode = document.getElementById('episode-select').value;
                                             const categoryId = document.getElementById('category-select').value;
-                                            const points = parseInt(document.getElementById('points-input').value);
+                                            const points = parseFloat(document.getElementById('points-input').value);
                                             const note = document.getElementById('note-input').value;
                                             const notifyScored = document.getElementById('notify-scored-checkbox') ? document.getElementById('notify-scored-checkbox').checked : false;
                                             
-                                            if (targetPlayerIds.length === 0 || !episode || !categoryId || isNaN(points)) {
-                                                alert(targetPlayerIds.length === 0 ? 'Please select at least one player.' : 'Please fill in all required fields');
+                                            if (targetPlayerIds.length === 0) {
+                                                alert('Please select at least one player.');
+                                                return;
+                                            }
+
+                                            if (categoryId === 'votes-survived') {
+                                                const votesCount = parseFloat(votesReceived);
+                                                if (isNaN(votesCount) || votesCount < 1) {
+                                                    alert('Please enter the number of votes received (must be at least 1).');
+                                                    return;
+                                                }
+                                            }
+
+                                            if (!episode || !categoryId || isNaN(points)) {
+                                                alert('Please fill in all required fields');
                                                 return;
                                             }
                                             
@@ -4246,6 +4398,7 @@
                                                     setSelectedCategoryId('');
                                                     setCategorySearchTerm('');
                                                     setSelectedPlayerIds([]);
+                                                    setVotesReceived('');
                                                     setShowAddScore(false);
                                                     
                                                     const leagueNames = selectedAddScoreLeagues.map(id => (LEAGUES_DATA[id] || {}).name || id).join(', ');
@@ -4293,6 +4446,7 @@
                                                 setSelectedCategoryId('');
                                                 setCategorySearchTerm('');
                                                 setSelectedPlayerIds([]);
+                                                setVotesReceived('');
                                                 setShowAddScore(false);
                                                 
                                                 const leagueNames = selectedAddScoreLeagues.map(id => (LEAGUES_DATA[id] || {}).name || id).join(', ');
@@ -4903,7 +5057,7 @@
     <script>
     // Register service worker for PWA
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('service-worker.js')
+        navigator.serviceWorker.register('service-worker.js?v=10')
             .then((registration) => {
                 console.log('Service Worker registered:', registration);
             })
