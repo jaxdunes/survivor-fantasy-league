@@ -1,71 +1,56 @@
-# Walkthrough: Custom Tribe Color Selection, Bulk Edit Layout Reordering & Add Points Shortcut
+# Walkthrough: In-Page Bulk Tribe Edit Visualizer & Tribe Management Overhaul
 
-## Executive Summary
-This document summarizes the changes, root-cause resolutions, and verification results for the bug fixes and enhancements requested:
-1. **Custom Tribe Color Selection Fix**: Fixed the issue where selecting a color when adding a new tribe did not visibly highlight or update the selected color swatch or badge preview.
-2. **Bulk Edit Modal Reordering**: Rearranged the Visual Bulk Tribe Dashboard so that all active competing tribes (including newly added custom tribes) appear side-by-side in the top grid, while the **Merge Tribe** is partitioned and prominently arranged at the bottom.
-3. **Add Points "Edit Tribe" Button**: Added an **"🏕️ Edit Tribe"** shortcut button to the **Player Selection** header of the **Add Points** modal on `index.html`. Clicking this button deep-links to `draft.html?openBulkEdit=true&ep={selectedEpisode}` and automatically opens the Visual Bulk Edit modal for seamless episode-specific roster editing.
-4. **Emoji Removal in Add/Edit Tribe Menu**: Completely removed all emojis from the Add / Edit Tribe modal (from title, preview, and color swatch buttons). Swatches now render sleek, glowing, solid color dots with clean uppercase typography.
-5. **"Unassign All Players" Button**: Added an "Unassign All Players" button to the Visual Bulk Edit Dashboard header. Clicking this button immediately maps all active players for the current episode into the `Unassigned` category so the user can drag each player directly into their designated tribe.
-6. **Per-Tribe "Edit Tribe" Button**: Added an "Edit Tribe" button directly to every tribe card header on the Bulk Tribe Edit Dashboard. Clicking this opens the Edit Tribe modal pre-populated with the tribe's current name and color, allowing users to rename and recolor any tribe (including default tribes like Toka, Savu, and Merge Tribe) and persist the state across the season.
-7. **Data Isolation**: All manual tests and automated browser sessions were conducted strictly against the `dev_testing/` Firebase namespace via the environment guard in [`js/config.js`](file:///Users/ryantaylor/Desktop/survivor-fantasy-league/js/config.js). Zero live production data was touched.
+**Branch**: `bug_fix/tribe-color-selection-and-bulk-edit`  
+**Folder**: `bug_fixes/tribe_color_selection_and_bulk_edit_reorder/`  
 
 ---
 
-## Changes by Component
+## 1. Overview of Changes
 
-### 1. `js/scoring-engine.js`
-- **Dark Theme Badge Styles**: Extended `PRIMARY_COLOR_PALETTES` to include `darkBadgeBg`, `darkBadgeText`, and `darkBadgeBorder` tokens for all 8 palettes (`blue`, `green`, `red`, `yellow`, `purple`, `orange`, `pink`, `black`/`slate`).
-- **Dynamic CSS Resolver**: Ensured `window.getTribeStyle(tribeName, customTribes)` accurately resolves custom tribe colors for badges, dots, and borders across both light and dark themes.
+We resolved the issue where clicking the "Edit Tribe" button in the "Add Points" modal on `index.html` navigated users away to `draft.html`. The Visual Bulk Tribe Edit Dashboard is now seamlessly embedded in-page directly on `index.html`.
 
-### 2. `index.html`
-- **Tribe Color Resolution**: Updated `getTribeBadgeColor` and `getTribeDotColor` to accept and utilize `customTribes` from `seasonData.customTribes`, avoiding incorrect default fallback colors.
-- **Player Selection "Edit Tribe" Shortcut**:
-  - Added the `🏕️ Edit Tribe` button in the `Player Selection` header inside the `Add Points` modal.
-  - Deep-links directly to `draft.html` with query parameters `league=${activeLeagueId}&season=${activeSeasonId}&openBulkEdit=true&ep=${lastSelectedEpisode || 1}`.
-
-### 3. `draft.html`
-- **Emoji Removal**:
-  - Eliminated all emojis from `showAddCustomTribeModal` (modal title, live preview badge, and color swatch dots).
-  - Swatches display clean, theme-immune glowing color dots with uppercase labels.
-- **Per-Tribe Edit Functionality**:
-  - Added `editingTribeOriginalName` state and `handleOpenEditTribe(tribeName)` resolver.
-  - Added an `Edit Tribe` button to each tribe card header in `renderTribeCard`.
-  - In `handleSaveCustomTribe`:
-    - Handles renaming existing tribes, updating all contestant records in `seasonData.contestants`, `tribeHistory`, and active `bulkAssignments`.
-    - Handles recoloring existing tribes by updating `customTribes`, allowing overrides on default tribes (e.g. Toka, Savu, Merge Tribe).
-- **Unassign All Players Action**:
-  - Added `handleUnassignAllPlayers()` mapping all active players for `bulkEditEpisode` into the `'Unassigned'` bucket.
-  - Added the `Unassign All Players` button in the header toolbar of the Visual Bulk Edit modal.
-- **Layout Reordering**:
-  - Partitioned `availableTribes` into `competingTribes` (active original tribes Toka, Savu + any custom tribes) and `mergeTribes` (e.g. `Merge Tribe`).
-  - Rendered `competingTribes` in the upper responsive grid. Newly created tribes immediately appear side-by-side with original tribes.
-  - Placed `mergeTribes` and `Unassigned` in the dedicated bottom section with divider and descriptive header.
+### Key Enhancements Delivered:
+1. **In-Page Bulk Tribe Edit Modal on `index.html`**:
+   - Clicking `🏕️ Edit Tribe` in the Add Points modal opens the visualizer modal in-page (`z-[1100]`) over the Add Points modal (`z-index: 1000`).
+   - The user is **never** navigated away to `draft.html`.
+   - Exiting via **Cancel**, **✕ Close**, or **Save Changes** immediately closes the visualizer and returns the user directly to the Add Points screen with all new tribes, color themes, and player assignments instantly reflected.
+2. **Permanent Merge Tribe Protection**:
+   - The Merge Tribe container is arranged at the bottom of the visualizer and has **no Edit Tribe button**.
+3. **Emoji-Free Add / Edit Custom Tribe Modal**:
+   - Removed all emojis from the Add Tribe and Edit Tribe sub-modals (`#modal-add-custom-tribe`), providing a clean tribal aesthetic.
+4. **"Unassign All Players" Button**:
+   - Added a one-click button (`#btn-bulk-unassign-all`) to move all active contestants into the Unassigned category for convenient redistribution.
+5. **Per-Tribe "Edit Tribe" Button on Competing Tribes**:
+   - Each competing tribe card in the bulk visualizer features an "Edit Tribe" button to rename the tribe and re-select its color palette.
+6. **Strict Dev Testing Isolation**:
+   - All tests executed in the `dev_testing/` namespace guard on `localhost:8000`, ensuring live production data remained completely untouched.
 
 ---
 
-## Visual Verification
+## 2. Visual Verification & Proof
 
-### 1. Emoji-Free Edit / Add Tribe Modal
-The Add / Edit Tribe modal is completely devoid of emojis. Swatches show clean, solid, radiant color dots, uppercase labels, an active checkmark (`✓`), and a real-time live preview.
+### Visual Bulk Dashboard Overlay on `index.html`
+The Bulk Tribe Edit Visualizer opens directly on `index.html` without changing the page URL:
+- Video recording: `bulk_edit_inpage_flow_1792032165355.webp`
+- Bulk Visualizer Screen: `media_1792032559424.png` (showing Active Tribes top, Merge Tribe bottom without edit button, "Unassign All Players", and "+ Add Tribe").
 
-![Emoji-Free Edit Tribe Modal](/Users/ryantaylor/.gemini/antigravity-ide/brain/05117ea4-d357-4cb3-999e-bcb47c9424c7/edit_tribe_modal_no_emojis.png)
-
-### 2. "Unassign All Players" State on Bulk Dashboard
-Clicking "Unassign All Players" clears all active tribe rosters to `0 player(s)` and deposits all contestants into the bottom `Unassigned` pool for drag-and-drop redistribution. Note also the "Edit Tribe" button on every tribe card!
-
-![Unassign All Players State](/Users/ryantaylor/.gemini/antigravity-ide/brain/05117ea4-d357-4cb3-999e-bcb47c9424c7/unassign_all_players_state.png)
-
-### 3. "Edit Tribe" Shortcut in Add Points Modal
-In `index.html`, the Add Points modal features the `🏕️ Edit Tribe` shortcut button directly in the `Player Selection` header.
-
-![Edit Tribe Shortcut Button](/Users/ryantaylor/.gemini/antigravity-ide/brain/05117ea4-d357-4cb3-999e-bcb47c9424c7/edit_tribe_button_add_points.png)
+### Return to Add Points Screen on Exit
+When clicking Cancel or Save Changes, the visualizer closes and the user is directly back at the Add Points screen:
+- Post-Cancel Screenshot: `media_1792032576046.png`
+- Post-Save Changes with Updated Tribe State: `add_points_modal_solana_1792032862508.png`
 
 ---
 
-## Production Data Segregation Verification
-All tests were executed under `http://localhost:8000`. As confirmed by the UI banner:
-```
-🧪 DEV MODE | Firebase Path: dev_testing/
-```
-All Firebase Realtime Database reads and writes were intercepted by `wrapDatabaseInstance` in [`js/config.js`](file:///Users/ryantaylor/Desktop/survivor-fantasy-league/js/config.js) and directed exclusively to `dev_testing/seasons/...` and `dev_testing/leagues/...`. Live production nodes were completely untouched.
+## 3. Automated Browser Test Summary
+
+| Step | Action | Expected Result | Result |
+|---|---|---|---|
+| 1 | Open `index.html` | Dashboard loads | Pass |
+| 2 | Click `+ Add Points` | Add Points modal opens | Pass |
+| 3 | Click `#btn-edit-tribe` | Visualizer opens in-page (`#modal-bulk-edit`) | Pass |
+| 4 | Check URL | Remains `index.html` (NOT `draft.html`) | Pass |
+| 5 | Check Merge Tribe container | No "Edit Tribe" button rendered | Pass |
+| 6 | Click Cancel | Visualizer closes, returns directly to Add Points | Pass |
+| 7 | Re-open `#btn-edit-tribe` & click `➕ Add Tribe` | Modal opens, no emojis | Pass |
+| 8 | Create "Solana", pick color, save | Tribe added to visualizer | Pass |
+| 9 | Click "Save Changes" | Visualizer closes, Add Points reflects updated state | Pass |

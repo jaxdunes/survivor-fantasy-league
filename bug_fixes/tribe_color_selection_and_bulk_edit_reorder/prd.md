@@ -1,31 +1,37 @@
 # Product Requirements Document (PRD)
 
-## Bug Fix: Tribe Color Selection, Bulk Edit Layout Reordering, and Cross-Screen Tribe Edit Navigation
+## Bug Fix & Feature: Tribe Color Selection, Bulk Edit Visualizer In-Page Workflow, and Tribe Management Overhaul
 
 **Branch**: `bug_fix/tribe-color-selection-and-bulk-edit`  
 **Folder**: `bug_fixes/tribe_color_selection_and_bulk_edit_reorder/`  
 **Target Files**: `draft.html`, `index.html`, `js/scoring-engine.js`  
-**Status**: In Progress  
+**Status**: Completed  
 
 ---
 
 ### 1. Problem Statement & Background
 
-In the Survivor Fantasy League platform, administrators manage tribe memberships across episodes using both the **Draft Board** (`draft.html`) and the **Add Points** modal on the scoring dashboard (`index.html`). Several usability and functional defects have been identified in the tribe management workflow:
+In the Survivor Fantasy League platform, administrators manage tribe memberships across episodes using both the **Draft Board** (`draft.html`) and the **Add Points** modal on the scoring dashboard (`index.html`). Multiple usability defects and feature enhancements were identified:
 
-1. **Broken Tribe Color Picker in Add Tribe Modal**:
-   When an administrator attempts to add a new custom tribe via the "➕ Add Tribe" sub-modal, clicking on color theme swatches (Yellow, Purple, Blue, Green, Red, Orange, Pink, Black) fails to visually update the selected state. The Tribal Council theme CSS (`body.theme-tribal`) applies aggressive `!important` declarations to background colors, border colors, and box shadows (specifically targeting Tailwind's `bg-*-50` and border utilities). This completely suppresses Tailwind's `ring-2` active state indicators and forces all swatches into a dark brown box with an amber border—except Orange, which lacked the override and appeared permanently selected. As a result, the administrator cannot perceive or confirm their color selection.
+1. **Unwanted Navigation Away from Add Points Modal to `draft.html`**:
+   Previously, clicking the "Edit Tribe" button in the "Add Points" modal on `index.html` navigated the user away to `draft.html`. When an administrator is entering weekly episode scores, leaving the page disrupts their workflow and loses entered score form context. The bulk visualizer needed to open directly in-page on `index.html`. Upon exit (Cancel, Close, or Save Changes), the user must immediately return to the Add Points modal with the updated state of the website (new tribes, edited colors/names, player assignments) immediately reflected.
 
-2. **Missing Custom Tribe Color Presentation in Menus & Modals**:
-   In `index.html`, custom tribes are not rendered with their chosen color themes in the "Add Points" modal's Player Selection section. `getTribeDotColor` was invoked without passing `customTribes`, and `getTribeBadgeColor` hardcoded only the standard Season 50/51 tribes, causing any newly created custom tribe to default to generic dark slate with orange dots.
+2. **Broken Tribe Color Picker in Add Tribe Modal**:
+   When an administrator attempts to add a new custom tribe via the "➕ Add Tribe" sub-modal, clicking on color theme swatches failed to visually update the selected state due to `body.theme-tribal` `!important` CSS rules overriding Tailwind classes.
 
 3. **Suboptimal Multi-Edit Tribe Screen Layout**:
-   In the Visual Bulk Tribe Edit Dashboard (`draft.html`), all tribe containers (`availableTribes`) were rendered in an unsegmented 3-column grid. Because "Merge Tribe" was inserted immediately after the starting tribes, it occupied Column 3 alongside the two original tribes (Toka and Savu). When a new tribe was added, it bumped Merge Tribe or caused awkward grid wraps. Competing pre-merge tribes (both original and newly added tribes) should be grouped side-by-side at the top, with the destination **Merge Tribe** container arranged distinctly at the bottom of the screen.
+   In the Visual Bulk Tribe Edit Dashboard, the Merge Tribe container was mixed into the top grid. Competing pre-merge tribes (both original and newly added tribes) should be grouped side-by-side at the top, with the destination **Merge Tribe** container arranged distinctly at the bottom of the screen.
 
-4. **Missing "Edit Tribe" Button in Add Points Player Selection**:
-   When entering scores in `index.html` via the "➕ ADD POINTS" modal, administrators often discover that a contestant was swapped or belongs to a different tribe for that episode. Currently, there is no direct action to adjust tribes from this section; the admin must dismiss the modal and leave the page. An **"Edit Tribe"** button is needed directly in the Player Selection section of the "Add Points" modal that navigates seamlessly to the Visual Bulk Tribe Edit Dashboard in `draft.html` and automatically opens the bulk edit modal.
+4. **Merge Tribe Edit Button Restriction**:
+   The Merge Tribe is a permanent, fixed structure in Survivor and must never have an "Edit Tribe" button, whereas regular competing tribes should have an "Edit Tribe" button allowing administrators to rename them and re-select their color theme.
 
-5. **Test Data Isolation Guard**:
+5. **No Emojis in Add / Edit Tribe Screens**:
+   The Add/Edit Tribe screens must maintain a clean, professional aesthetic 100% free of emojis.
+
+6. **Unassign All Players Feature**:
+   Admins requested an "Unassign all players" action button on the bulk tribe visualizer that moves all active contestants into the Unassigned category for convenient drag-and-drop redistribution.
+
+7. **Test Data Isolation Guard**:
    All verification and automated browser testing must strictly adhere to the `dev_testing/` Firebase namespace guard so that live league and season data remain completely untouched.
 
 ---
@@ -34,34 +40,28 @@ In the Survivor Fantasy League platform, administrators manage tribe memberships
 
 | ID | Category | Requirement Description | Success Criteria |
 |---|---|---|---|
-| **FR-1** | Color Selection | Overhaul the color theme selector in `showAddCustomTribeModal` (`draft.html`) with bulletproof styling immune to theme `!important` overrides. | Clicking any color swatch (Yellow, Purple, Blue, Green, Red, Orange, Pink, Black) immediately updates the visual selection with a vibrant border, active ring, and checkmark. A live badge preview displays the tribe name and chosen color in real time. |
-| **FR-2** | Color Reset | Cleanly reset modal state upon opening or dismissing. | Opening "Add Tribe" initializes with a clean state and highlights the selected color correctly. |
-| **FR-3** | Multi-Edit Layout | Reorganize the Visual Bulk Tribe Edit Dashboard container layout. | Active competing tribes (original tribes e.g. Toka & Savu, plus any newly added custom tribes) are arranged side-by-side at the top. The "Merge Tribe" container is arranged at the bottom as a dedicated merge staging area. Drag-and-drop between all containers remains fully functional. |
-| **FR-4** | Cross-Screen Colors | Ensure custom tribe colors and icons render consistently in `index.html`. | Custom tribes created in `draft.html` reflect their assigned colors and dot colors in `index.html`'s "Add Points" Player Selection section and ParchmentContestantTag. |
-| **FR-5** | "Edit Tribe" Button | Add an "Edit Tribe" button to the Player Selection header in the "Add Points" modal (`index.html`). | The button is prominently displayed in the Player Selection header. Clicking it links to `draft.html?league={activeLeagueId}&season={activeSeasonId}&openBulkEdit=true&ep={selectedEp}`. |
-| **FR-6** | Deep-Link Auto-Open | Support `openBulkEdit` query parameter in `draft.html`. | When `draft.html` loads with `openBulkEdit=true` or `openBulkEdit=1`, it automatically opens the Visual Bulk Tribe Edit Dashboard, initializes the target episode from the `ep` parameter if provided, and cleans up the URL query parameter. |
-| **FR-7** | Data Isolation | Isolate test mutations during verification. | All testing operates on `localhost` with Firebase writes directed to `dev_testing/` namespace or test leagues. No production nodes are modified. |
+| **FR-1** | In-Page Bulk Visualizer | Embed the Visual Bulk Tribe Edit Dashboard directly on `index.html` as a high z-index modal overlay (`z-[1100]`). | Clicking "Edit Tribe" in the Add Points modal opens the visualizer in-page without navigating to `draft.html`. Exiting returns directly to Add Points with changes reflected. |
+| **FR-2** | Color Selection | Overhaul the color theme selector with bulletproof styling immune to theme `!important` overrides. | Clicking any color swatch immediately updates the visual selection with a vibrant border, active ring, and checkmark. A live badge preview displays the tribe name and chosen color in real time. |
+| **FR-3** | Emoji-Free Add/Edit Tribe | Ensure Add and Edit Tribe modal headers and previews are 100% emoji-free. | No emojis appear in the Add or Edit Tribe modal title, labels, or preview tags. |
+| **FR-4** | Multi-Edit Layout | Reorganize the Visual Bulk Tribe Edit Dashboard container layout. | Active competing tribes (original tribes Toka & Savu, plus any newly added custom tribes) are arranged side-by-side at the top. "Merge Tribe" container is arranged at the bottom as a dedicated merge staging area. |
+| **FR-5** | Unassign All Players | Add an "Unassign All Players" button to the bulk visualizer header. | Moves all active non-eliminated players for the selected episode into the Unassigned bucket. |
+| **FR-6** | Edit Tribe per Container | Add an "Edit Tribe" button on each competing tribe card in the bulk visualizer; exclude from Merge Tribe. | Admins can edit competing tribe names and colors. Merge Tribe has no edit button. |
+| **FR-7** | Dynamic State Update in Add Points | Player Selection in Add Points modal dynamically re-groups contestants and tribes using episode-aware helpers. | Upon closing bulk edit, new tribes and updated assignments appear instantly in Add Points. |
+| **FR-8** | Data Isolation | Isolate test mutations during verification. | All testing operates on `localhost` with Firebase writes directed to `dev_testing/` namespace or test leagues. |
 
 ---
 
 ### 3. User Experience & Design Specifications
 
-- **Add Tribe Modal Color Swatches**:
-  - Grid of color swatches styled with explicit inline CSS / scoped classes to resist `theme-tribal` overrides.
-  - Active swatch state: distinct glowing border (`box-shadow`), white/contrasting ring, scale bump (105%), and an explicit checkmark (`✓`) badge over the color circle.
-  - Live Preview Pill: Displays `[Dot/Emoji] Tribe Name` using the chosen palette gradient and badge text so administrators preview the exact look before saving.
+- **Add Points Screen - Edit Tribe Trigger**:
+  - Located beside the "Player Selection" title in the Add Points modal (`#btn-edit-tribe`).
+  - Opens `#modal-bulk-edit` (`z-[1100]`) on top of the Add Points modal backdrop (`z-index: 1000`).
 - **Visual Bulk Tribe Dashboard Layout**:
-  - **Upper Section**: "Active Competing Tribes" container grid (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4`). Original tribes appear first, with newly added tribes positioned directly next to them in sequence.
-  - **Lower Section**: "Merge Tribe" container clearly demarcated at the bottom (`w-full mt-4 bg-purple-950/30 border-2 border-purple-500/50 rounded-2xl p-4`), offering a dedicated drag-and-drop target for merged players.
-- **Add Points Modal - Player Selection Header**:
-  - Located beside the "Player Selection" title and count badge.
-  - Styled as a compact, sleek button: `🏕️ Edit Tribes` with subtle amber/orange outline matching the tribal theme.
-  - On click: redirects to `draft.html?league=...&season=...&openBulkEdit=true&ep=...`.
-
----
-
-### 4. Non-Functional & Safety Requirements
-
-- **Theme Compatibility**: Must work seamlessly across both standard light mode and `theme-tribal` dark mode.
-- **Data Integrity**: Season custom tribes and contestants must serialize cleanly to Firebase Realtime Database.
-- **Zero Production Mutation**: Local execution on `localhost:8000` must remain trapped in the `dev_testing/` prefix as verified by `js/config.js`.
+  - **Upper Section**: "Active Competing Tribes" container grid (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4`). Original tribes appear first, with newly added tribes positioned directly next to them in sequence. Each has an "Edit Tribe" button.
+  - **Lower Section**: "Merge Tribe" container clearly demarcated at the bottom, without an "Edit Tribe" button.
+  - **Action Header**: "➕ Add Tribe" (`#btn-bulk-add-tribe`), "Unassign All Players" (`#btn-bulk-unassign-all`), "🤝 Merge All Players" (`#btn-bulk-merge-all`), and "✕" (`#btn-bulk-close`).
+  - **Footer Controls**: "Cancel" (`#btn-bulk-cancel`) and "Save Changes" (`#btn-bulk-save-changes`). Both close the visualizer and return immediately to the Add Points screen.
+- **Add / Edit Custom Tribe Modal**:
+  - Embedded as `#modal-add-custom-tribe` (`z-[1200]`).
+  - Professional tribal typography with clean live preview pill without emojis.
+  - Color swatches with distinct glowing borders, contrasting rings, and checkmark badges.

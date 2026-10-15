@@ -1,76 +1,66 @@
-# Implementation Plan
-
-## Bug Fix: Tribe Color Selection, Bulk Edit Layout Reordering, and Cross-Screen Tribe Edit Navigation
+# Implementation Plan: In-Page Bulk Tribe Edit Visualizer, Color Selection & Tribe Management
 
 **Branch**: `bug_fix/tribe-color-selection-and-bulk-edit`  
 **Folder**: `bug_fixes/tribe_color_selection_and_bulk_edit_reorder/`  
-**Target Files**: `draft.html`, `index.html`, `js/scoring-engine.js`  
-**Status**: In Progress  
+**Target Files**: `index.html`, `draft.html`, `js/scoring-engine.js`  
 
 ---
 
-### Step 1: Fix Tribe Color Selection & Live Preview in Add Tribe Modal (`draft.html`)
+## 1. Overview & Objectives
 
-1. **Root Cause Analysis in CSS**:
-   `body.theme-tribal` sets `!important` on `.bg-*-50`, `.border-...`, and `box-shadow` on cards and buttons, blocking Tailwind's `ring-2` focus rings and turning color buttons dark brown. Orange was unaffected because `.bg-orange-50` was omitted from the dark mode CSS list, making it appear stuck as the only selected button.
-
-2. **Implementation**:
-   - In `draft.html` (`showAddCustomTribeModal`), re-style the color swatches using explicit inline styles (`style={{ backgroundColor, borderColor, boxShadow }}`) to make them immune to `!important` CSS rules.
-   - Add a visible checkmark icon (`✓`) on the actively selected swatch.
-   - Add a real-time **Live Tribe Preview Pill** directly inside the modal so administrators can see the exact dot color, gradient, and text badge before clicking "Save Tribe".
-   - Reset `customTribeColor` and `customTribeName` when opening and closing the modal.
+Deliver an in-page workflow on `index.html` where clicking the "Edit Tribe" button in the "Add Points" modal opens the Visual Bulk Tribe Edit Dashboard right on top of `index.html` (instead of navigating away to `draft.html`), and upon exiting (via Cancel, Close, or Save Changes), returns directly to the Add Points screen with all updated tribes, colors, and player assignments immediately reflected.
 
 ---
 
-### Step 2: Rearrange Multi-Edit Tribe Screen Layout (`draft.html`)
+## 2. Key Architecture & Design Decisions
 
-1. **Current Layout Defect**:
-   `availableTribes` combines all tribes in a flat array (`[Toka, Savu, Merge Tribe, Unassigned]`), causing the Merge Tribe container to sit in the 3rd column of the first row alongside the original tribes.
+### Modal Layering & Stacking Context
+- The Add Points modal backdrop in `index.html` uses `.modal-backdrop` (`z-index: 1000`).
+- To allow the Bulk Tribe Visualizer to render directly on top of the Add Points modal without dismissing it or navigating away, we established a strict z-index hierarchy:
+  - Add Points Modal Backdrop: `z-index: 1000`
+  - Visual Bulk Tribe Edit Modal (`#modal-bulk-edit`): `z-[1100]`
+  - Add / Edit Custom Tribe Modal (`#modal-add-custom-tribe`): `z-[1200]`
+  - Confirm Merge Modal (`#modal-confirm-merge`): `z-[1300]`
 
-2. **Implementation**:
-   - Partition tribes into:
-     - `competingTribes`: Original starting tribes (Toka, Savu) followed by any newly created custom tribes.
-     - `mergeTribe`: Dedicated container for 'Merge Tribe' arranged at the bottom.
-     - `unassignedTribe`: Dedicated container for 'Unassigned' if players exist in this state.
-   - Render `competingTribes` side-by-side in the main grid (`md:grid-cols-2 lg:grid-cols-3 gap-4`).
-   - Render `mergeTribe` in a dedicated full-width container at the **bottom** of the modal, styled with distinctive purple merge branding and clear instructions.
-   - Preserve complete Drag & Drop support between all containers.
+### In-Page State Management on `index.html`
+- Implemented state hooks directly in `ScoringPage`:
+  - `showBulkEditModal`, `bulkEditEpisode`, `bulkAssignments`, `draggedPlayerId`, `showConfirmMergeModal`, `showAddCustomTribeModal`, `editingTribeOriginalName`, `customTribeName`, `customTribeColor`.
+- Action handlers:
+  - `handleOpenBulkEdit(targetEp)`: Initializes assignments from episode tribe data, sets target episode, and opens `#modal-bulk-edit`.
+  - `handleBulkEpisodeChange(newEp)`: Re-indexes assignments for the newly selected episode.
+  - `handleUnassignAllPlayers()`: Reassigns all active non-eliminated players for the current episode to 'Unassigned'.
+  - `handleOpenAddCustomTribe()` & `handleOpenEditTribe(tribeName)`: Opens the emoji-free custom tribe modal.
+  - `handleSaveCustomTribe()`: Creates or updates custom tribe records in `seasonData` and persists to Firebase (`dev_testing/` protected).
+  - `handleSaveBulkEdit()`: Builds updated contestant tribe histories, persists them season-wide, and closes `#modal-bulk-edit`.
+  - `handleConfirmMergeAll()`: Batches all active players into Merge Tribe and awards merge points.
+
+### Dynamic Player Selection Grouping in Add Points Modal
+- Updated `Player Selection` in Add Points to evaluate `scoringTribeMap` dynamically:
+  ```javascript
+  const selectedEpNum = parseInt(lastSelectedEpisode) || 1;
+  const scoringTribeMap = {};
+  players.forEach(p => {
+      const tName = typeof window.getTribeForEpisode === 'function'
+          ? window.getTribeForEpisode(p, selectedEpNum)
+          : (p.tribe || p.startingTribe || 'Unassigned');
+      if (!scoringTribeMap[tName]) scoringTribeMap[tName] = [];
+      scoringTribeMap[tName].push(p);
+  });
+  ```
+- Because `players` is derived from `seasonData.contestants`, saving changes in the bulk visualizer triggers an immediate React state re-render, displaying new tribes and redistributed players without reloading the page.
 
 ---
 
-### Step 3: Implement Deep-Link Auto-Open for Bulk Edit Modal (`draft.html`)
+## 3. Verification Plan
 
-1. **URL Parameter Support**:
-   - Read URL search parameters on component mount:
-     - `openBulkEdit`: if `'true'` or `'1'`, invoke `handleOpenBulkEdit()`.
-     - `ep`: if provided (e.g. `ep=4`), set `bulkEditEpisode` to this episode.
-   - Use `window.history.replaceState` to cleanly strip the `openBulkEdit` parameter so page refreshes do not re-trigger the modal.
-
----
-
-### Step 4: Add "Edit Tribe" Button & Color Fix in "Add Points" Modal (`index.html`)
-
-1. **Add "Edit Tribe" Button in Player Selection**:
-   - In `index.html` (inside the "Add Points" modal's "Player Selection" section), add a styled button/link:
-     - Label: `🏕️ Edit Tribes`
-     - Action: Navigates to `draft.html?league=${activeLeagueId}&season=${activeSeasonId}&openBulkEdit=true&ep=${lastSelectedEpisode || 1}`.
-   - Match the UI styling of the surrounding Player Selection header.
-
-2. **Fix Custom Tribe Presentation in `index.html`**:
-   - In `getTribeDotColor` and `getTribeBadgeColor` inside `index.html`, pass `seasonData?.customTribes` into `window.getTribeDotColor` and `window.getTribeStyle`.
-   - Ensure newly added custom tribes display their proper badge and dot colors instead of defaulting to slate/orange.
-
----
-
-### Step 5: Verification & Browser Testing with Segregated Test Data
-
-1. **Verification of Data Segregation**:
-   - Confirm `IS_DEV_ENV` evaluates to `true` on `localhost:8000` and `dev-env-indicator` is visible.
-   - Confirm all Firebase reads/writes are routed to `dev_testing/` namespace.
-2. **Interactive Browser Testing**:
-   - Test color selection in the "Add New Custom Tribe" modal across multiple colors (Yellow, Purple, Blue, Red, Pink, Black).
-   - Verify selected color visually updates with glowing ring and checkmark.
-   - Add a new custom tribe and verify it appears next to the original tribes in the top grid.
-   - Verify "Merge Tribe" container is positioned at the bottom of the multi-edit dashboard.
-   - Navigate to `index.html`, open "➕ ADD POINTS", check "Player Selection", and verify the new "Edit Tribes" button appears and functions.
-   - Click "Edit Tribes" and verify it navigates to `draft.html` and automatically opens the Bulk Tribe Edit modal on the target episode.
+1. **Syntax Validation**: Verify `index.html` using JavaScriptCore (`jsc`) with 0 syntax errors.
+2. **Browser Subagent End-to-End Test**:
+   - Open `index.html?league=jackson-ryan-league&season=season-51`.
+   - Open Add Points modal.
+   - Click `#btn-edit-tribe`.
+   - Verify `#modal-bulk-edit` opens in-page on `index.html` (URL is NOT `draft.html`).
+   - Verify Merge Tribe container has no "Edit Tribe" button.
+   - Click "Cancel" -> verify return to Add Points modal.
+   - Re-open `#btn-edit-tribe`, click "➕ Add Tribe", verify no emojis, add tribe "Solana", save.
+   - Click "Save Changes", verify modal closes and returns to Add Points with updated state.
+3. **Database Guard Check**: Verify that all writes are routed under `dev_testing/` namespace.
