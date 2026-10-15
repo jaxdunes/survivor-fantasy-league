@@ -1,7 +1,7 @@
 # Product Requirements Document (PRD): [Feature or Bug Fix Title]
 
 **Version**: 1.0  
-**Status**: In Progress  
+**Status**: Draft (Awaiting User Review)  
 **Location**: `[appropriate_folder]/[item_name]/prd.md`  
 **Target Files**: `[comma-separated list of files, e.g. js/scoring-engine.js, draft.html]`  
 **Git Branch**: `[feature or bugfix branch name]`  

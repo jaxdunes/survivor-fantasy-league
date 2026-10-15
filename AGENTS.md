@@ -19,7 +19,18 @@ These guidelines are strictly enforced for all tasks, feature developments, and 
 
 ---
 
-## 2. Production Data Safety & Isolation
+## 2. Interactive Planning & Design Gate (User Sign-Off Required)
+
+> [!IMPORTANT]
+> **Implementation must NEVER begin without explicit user sign-off.**
+
+- **Present PRD & Implementation Plan First**: Always formulate and present the `prd.md` and `implementationplan.md` to the user first before writing or modifying any application code.
+- **Interactive Design Turns**: Provide the user with conversational turns to review, critique, adjust requirements, and edit the design. Incorporate all user design adjustments into the plan and PRD.
+- **Explicit Instruction to Continue**: The agent must **STOP** and wait for the user to explicitly tell it to continue (e.g., "continue", "proceed", "looks good", "go ahead") before carrying out the implementation plan or modifying project files. Never assume approval or jump straight from planning into implementation in the same turn.
+
+---
+
+## 3. Production Data Safety & Isolation
 
 > [!CRITICAL]
 > **Live Production Firebase data must NEVER be read, written, or modified during local testing.**
@@ -30,7 +41,7 @@ These guidelines are strictly enforced for all tasks, feature developments, and 
 
 ---
 
-## 3. Test Data State Initialization & Segregation
+## 4. Test Data State Initialization & Segregation
 
 - **Initialize Test State**: When developing or testing, actively consider how to initialize the test site's data state so the developer can immediately test the site without tedious manual setup.
   - Provide seed data, mock fixtures, or console setup scripts that write exclusively into `dev_testing/` (or `localStorage`).

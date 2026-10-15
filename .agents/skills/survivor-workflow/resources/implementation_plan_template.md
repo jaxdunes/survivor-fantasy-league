@@ -1,7 +1,7 @@
 # Implementation Plan: [Feature or Bug Fix Title]
 
 **Location**: `[appropriate_folder]/[item_name]/implementationplan.md`  
-**Status**: Ready for Implementation  
+**Status**: Proposed (Awaiting User Review)  
 **PRD Reference**: `[appropriate_folder]/[item_name]/prd.md`  
 
 ---
